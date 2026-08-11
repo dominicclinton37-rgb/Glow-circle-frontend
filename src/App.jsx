@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Search, MapPin, Star, Calendar, Clock, ChevronLeft,
   Check, DollarSign, Heart, Home, Grid3x3, User, Bell,
   CreditCard, TrendingUp, X, Settings, ShieldCheck, ShieldAlert, Building2,
-  Smartphone, LayoutGrid, Store, Lock, Unlock, SlidersHorizontal
+  Smartphone, LayoutGrid, Store, Lock, Unlock, SlidersHorizontal,
+  Upload, Image as ImageIcon, Trash2, Scissors
 } from "lucide-react";
 
 const naira = (n) => `₦${Math.round(n).toLocaleString("en-NG")}`;
@@ -43,6 +44,8 @@ const SALONS = [
     services: [{ id: "sv13", name: "Full Body Massage", price: 22000, duration: 90 }, { id: "sv14", name: "Signature Facial", price: 16000, duration: 60 }],
     stylists: [{ id: "st7", name: "Grace", specialty: "Deep Tissue" }] },
 ];
+
+const ALL_STYLISTS = SALONS.flatMap(s => s.stylists.map(st => ({ ...st, salonId: s.id, salonName: s.name, salonPhoto: s.photo })));
 
 const TIME_SLOTS = ["9:00 AM", "10:30 AM", "12:00 PM", "1:30 PM", "3:00 PM", "4:30 PM", "6:00 PM"];
 const DATES = ["Today", "Tomorrow", "Wed 12", "Thu 13", "Fri 14"];
@@ -142,11 +145,33 @@ function HomeScreen({ goFeed }) {
   );
 }
 
-function FeedScreen({ category, setCategory, goProfile }) {
+function FeedScreen({ category, setCategory, goProfile, posts }) {
   const filtered = category ? SALONS.filter(s => s.category === category) : SALONS;
+  const publishedPosts = posts.filter(p => p.status === "published");
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <TopBar title="Discover" />
+      {publishedPosts.length > 0 && (
+        <div style={{ padding: "0 20px 14px" }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", marginBottom: 10 }}>STYLE FEED</div>
+          <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+            {publishedPosts.map(p => {
+              const salon = SALONS.find(s => s.id === p.salonId);
+              const stylist = salon?.stylists.find(st => st.id === p.stylistId);
+              if (!salon) return null;
+              return (
+                <button key={p.id} onClick={() => goProfile(salon)} style={{ minWidth: 140, textAlign: "left", border: "1px solid #EFE6DE", borderRadius: 14, overflow: "hidden", background: "#fff", cursor: "pointer", padding: 0 }}>
+                  {p.mediaType === "video" ? <video src={p.mediaUrl} style={{ width: "100%", height: 120, objectFit: "cover" }} /> : <img src={p.mediaUrl} style={{ width: "100%", height: 120, objectFit: "cover" }} alt={p.caption} />}
+                  <div style={{ padding: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700 }}>{stylist?.name} · {salon.name.split(" ")[0]}</div>
+                    <div style={{ fontSize: 10.5, color: "#8A7A85", marginTop: 2, lineHeight: 1.3 }}>{p.caption}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, padding: "0 20px 14px", overflowX: "auto" }}>
         <button onClick={() => setCategory(null)} style={{ padding: "7px 14px", borderRadius: 20, whiteSpace: "nowrap", border: !category ? "none" : "1px solid #EFE6DE", background: !category ? "#3D1B3D" : "#fff", color: !category ? "#fff" : "#241B24", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>All</button>
         {CATEGORIES.map(c => (<button key={c.id} onClick={() => setCategory(c.id)} style={{ padding: "7px 14px", borderRadius: 20, whiteSpace: "nowrap", border: category === c.id ? "none" : "1px solid #EFE6DE", background: category === c.id ? "#3D1B3D" : "#fff", color: category === c.id ? "#fff" : "#241B24", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{c.emoji} {c.label}</button>))}
@@ -179,7 +204,8 @@ function FeedScreen({ category, setCategory, goProfile }) {
   );
 }
 
-function SalonProfileScreen({ salon, onBack, startBooking }) {
+function SalonProfileScreen({ salon, onBack, startBooking, posts }) {
+  const portfolio = posts.filter(p => p.salonId === salon.id && p.status === "published");
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <div style={{ height: 190, background: salon.photo, position: "relative" }}>
@@ -213,6 +239,18 @@ function SalonProfileScreen({ salon, onBack, startBooking }) {
           ))}
         </div>
 
+        {portfolio.length > 0 && (
+          <>
+            <div style={{ fontSize: 13, fontWeight: 800, marginTop: 22, marginBottom: 10, color: "#3D1B3D" }}>RECENT WORK</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {portfolio.map(p => (
+                p.mediaType === "video"
+                  ? <video key={p.id} src={p.mediaUrl} style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 8 }} />
+                  : <img key={p.id} src={p.mediaUrl} style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 8 }} alt={p.caption} />
+              ))}
+            </div>
+          </>
+        )}
         <div style={{ fontSize: 13, fontWeight: 800, marginTop: 22, marginBottom: 10, color: "#3D1B3D" }}>CANCELLATION POLICY</div>
         <div style={{ border: "1px solid #EFE6DE", borderRadius: 14, padding: 14, background: "#fff", display: "flex", flexDirection: "column", gap: 6 }}>
           {REFUND_POLICY.map((r, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: "#8A7A85" }}>{r.window}</span><span style={{ fontWeight: 700 }}>{r.pct}% refund</span></div>))}
@@ -221,6 +259,7 @@ function SalonProfileScreen({ salon, onBack, startBooking }) {
     </div>
   );
 }
+
 function BookingFlow({ salon, service, onClose, onConfirmed, bookedSlots }) {
   const [step, setStep] = useState(1);
   const [stylist, setStylist] = useState(salon.stylists[0]);
@@ -407,6 +446,7 @@ function DashEarnings({ bookings, commissionRate, frozen }) {
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 12, opacity: 0.85 }}><TrendingUp size={13} /> Next payout: Monday, Aug 17 · GTBank ••1234</div>
         </div>
         <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "20px 0 10px" }}>THIS PERIOD</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "20px 0 10px" }}>THIS PERIOD</div>
         <div style={{ border: "1px solid #EFE6DE", borderRadius: 16, padding: 16, background: "#fff" }}>
           <Row label="Gross bookings" value={naira(gross)} />
           <Row label={`Glow Circle commission (${(commissionRate * 100).toFixed(0)}%)`} value={`–${naira(commission)}`} muted />
@@ -428,6 +468,83 @@ function DashEarnings({ bookings, commissionRate, frozen }) {
     </div>
   );
 }
+
+/* ---------------- STYLIST STUDIO ---------------- */
+
+function StylistStudio({ stylist, allStylists, onSwitchStylist, myPosts, onPublish, onDelete }) {
+  const [caption, setCaption] = useState("");
+  const [preview, setPreview] = useState(null);
+  const fileRef = useRef(null);
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setPreview({ url, type: file.type.startsWith("video") ? "video" : "image" });
+  };
+  const publish = () => {
+    if (!preview) return;
+    onPublish({ stylistId: stylist.id, salonId: stylist.salonId, mediaUrl: preview.url, mediaType: preview.type, caption });
+    setPreview(null); setCaption("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "22px 20px 6px" }}>
+        <div style={{ fontSize: 13, color: "#8A7A85", fontWeight: 600 }}>{stylist.salonName}</div>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600 }}>My Work & Feed</div>
+        <select value={stylist.id} onChange={(e) => onSwitchStylist(e.target.value)} style={{ marginTop: 10, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", color: "#3D1B3D" }}>
+          {allStylists.map(st => <option key={st.id} value={st.id}>{st.name} · {st.salonName}</option>)}
+        </select>
+      </div>
+      <div style={{ padding: "16px 20px" }}>
+        <div style={{ border: "1px dashed #C89B3C", borderRadius: 16, padding: 16, background: "#FBF3E0" }}>
+          {!preview ? (
+            <button onClick={() => fileRef.current.click()} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: "16px 0" }}>
+              <Upload size={22} color="#8A6A21" />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: "#8A6A21" }}>Add a photo or video of your work</span>
+            </button>
+          ) : (
+            <div>
+              {preview.type === "video"
+                ? <video src={preview.url} style={{ width: "100%", borderRadius: 12, maxHeight: 220, objectFit: "cover" }} controls />
+                : <img src={preview.url} style={{ width: "100%", borderRadius: 12, maxHeight: 220, objectFit: "cover" }} alt="preview" />}
+              <textarea value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption this look…" style={{ width: "100%", marginTop: 10, borderRadius: 10, border: "1px solid #EFE6DE", padding: 10, fontSize: 13, fontFamily: "inherit", resize: "none", minHeight: 60 }} />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={() => setPreview(null)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Discard</button>
+                <button onClick={publish} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: "#3D1B3D", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Publish</button>
+              </div>
+            </div>
+          )}
+          <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleFile} style={{ display: "none" }} />
+        </div>
+        <div style={{ fontSize: 11, color: "#B7ACB1", marginTop: 8 }}>Posts go to Glow Circle admin for review before they appear in the customer feed.</div>
+
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "22px 0 10px" }}>MY POSTS</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {myPosts.length === 0 && <div style={{ fontSize: 12.5, color: "#B7ACB1", gridColumn: "1 / -1" }}>No posts yet — share your first look above.</div>}
+          {myPosts.map(p => (
+            <div key={p.id} style={{ borderRadius: 14, overflow: "hidden", border: "1px solid #EFE6DE", background: "#fff" }}>
+              {p.mediaType === "video"
+                ? <video src={p.mediaUrl} style={{ width: "100%", height: 110, objectFit: "cover" }} />
+                : <img src={p.mediaUrl} style={{ width: "100%", height: 110, objectFit: "cover" }} alt={p.caption} />}
+              <div style={{ padding: 8 }}>
+                <div style={{ fontSize: 11, color: "#8A7A85", lineHeight: 1.3, minHeight: 28 }}>{p.caption || "—"}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                  <Pill tone={p.status === "published" ? "green" : p.status === "rejected" ? "red" : "gold"}>{p.status === "published" ? "Live" : p.status === "rejected" ? "Rejected" : "In review"}</Pill>
+                  <button onClick={() => onDelete(p.id)} style={{ background: "none", border: "none", cursor: "pointer" }}><Trash2 size={13} color="#B23B3B" /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- ADMIN DASHBOARD ---------------- */
 
 function AdminPayments({ bookings, commissionRate }) {
   const gross = bookings.reduce((s, b) => s + b.service.price, 0);
@@ -499,6 +616,36 @@ function AdminSalons({ salons, frozenSalons, toggleFreeze }) {
     </div>
   );
 }
+function AdminContent({ posts, setPostStatus }) {
+  return (
+    <div style={{ flex: 1, overflowY: "auto" }}>
+      <TopBar title="Content Moderation" />
+      <div style={{ padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {posts.length === 0 && <div style={{ fontSize: 12.5, color: "#B7ACB1", marginTop: 20 }}>No posts submitted yet.</div>}
+        {posts.map(p => {
+          const salon = SALONS.find(s => s.id === p.salonId);
+          const stylist = salon?.stylists.find(st => st.id === p.stylistId);
+          return (
+            <div key={p.id} style={{ border: "1px solid #EFE6DE", borderRadius: 14, overflow: "hidden", background: "#fff" }}>
+              {p.mediaType === "video"
+                ? <video src={p.mediaUrl} style={{ width: "100%", height: 160, objectFit: "cover" }} />
+                : <img src={p.mediaUrl} style={{ width: "100%", height: 160, objectFit: "cover" }} alt={p.caption} />}
+              <div style={{ padding: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{stylist?.name} · {salon?.name}</div>
+                <div style={{ fontSize: 12, color: "#8A7A85", marginTop: 4 }}>{p.caption || "No caption"}</div>
+                <div style={{ marginTop: 8 }}><Pill tone={p.status === "published" ? "green" : p.status === "rejected" ? "red" : "gold"}>{p.status}</Pill></div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => setPostStatus(p.id, "published")} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "none", background: "#3D1B3D", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Approve</button>
+                  <button onClick={() => setPostStatus(p.id, "rejected")} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", color: "#B23B3B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Reject</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function AdminSettings({ commissionRate, setCommissionRate, feeBearer, setFeeBearer }) {
   return (
@@ -533,6 +680,8 @@ function AdminSettings({ commissionRate, setCommissionRate, feeBearer, setFeeBea
   );
 }
 
+/* ---------------- ROOT APP ---------------- */
+
 export default function GlowCircleApp() {
   const [role, setRole] = useState("customer");
   const [tab, setTab] = useState("home");
@@ -547,30 +696,39 @@ export default function GlowCircleApp() {
   const [commissionRate, setCommissionRate] = useState(0.10);
   const [feeBearer, setFeeBearer] = useState("salon");
   const [frozenSalons, setFrozenSalons] = useState(new Set());
+  const [posts, setPosts] = useState([]);
+  const [currentStylistId, setCurrentStylistId] = useState(ALL_STYLISTS[0].id);
 
   const confirmBooking = (b) => { setBookings(prev => [b, ...prev]); setBookedSlots(prev => new Set(prev).add(`${b.stylist.id}|${b.date}|${b.slot}`)); };
   const toggleSlot = (d, t) => setAvailability(prev => ({ ...prev, [`${d}|${t}`]: prev[`${d}|${t}`] === false ? true : false }));
   const toggleFreeze = (id) => setFrozenSalons(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const addPost = (post) => setPosts(prev => [{ id: `p${Date.now()}`, status: "pending", ...post }, ...prev]);
+  const setPostStatus = (id, status) => setPosts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+  const deletePost = (id) => setPosts(prev => prev.filter(p => p.id !== id));
   const goFeed = (cat, salon) => { setFeedCategory(cat); if (salon) { setActiveSalon(salon); setTab("profile"); } else setTab("feed"); };
 
   const customerTabs = [{ id: "home", label: "Home", icon: Home }, { id: "feed", label: "Discover", icon: Grid3x3 }, { id: "bookings", label: "Bookings", icon: Calendar }, { id: "account", label: "Account", icon: User }];
   const dashTabs = [{ id: "overview", label: "Today", icon: Home }, { id: "calendar", label: "Calendar", icon: Calendar }, { id: "earnings", label: "Earnings", icon: DollarSign }];
-  const adminTabs = [{ id: "payments", label: "Payments", icon: DollarSign }, { id: "salons", label: "Salons", icon: Store }, { id: "settings", label: "Settings", icon: Settings }];
+  const adminTabs = [{ id: "payments", label: "Payments", icon: DollarSign }, { id: "salons", label: "Salons", icon: Store }, { id: "content", label: "Content", icon: ImageIcon }, { id: "settings", label: "Settings", icon: Settings }];
 
   let body;
   if (role === "customer") {
     if (tab === "home") body = <HomeScreen goFeed={goFeed} />;
-    else if (tab === "feed") body = <FeedScreen category={feedCategory} setCategory={setFeedCategory} goProfile={(s) => { setActiveSalon(s); setTab("profile"); }} />;
-    else if (tab === "profile") body = <SalonProfileScreen salon={activeSalon} onBack={() => setTab("feed")} startBooking={(salon, service) => setBookingCtx({ salon, service })} />;
+    else if (tab === "feed") body = <FeedScreen category={feedCategory} setCategory={setFeedCategory} goProfile={(s) => { setActiveSalon(s); setTab("profile"); }} posts={posts} />;
+    else if (tab === "profile") body = <SalonProfileScreen salon={activeSalon} onBack={() => setTab("feed")} startBooking={(salon, service) => setBookingCtx({ salon, service })} posts={posts} />;
     else if (tab === "bookings") body = <BookingsScreen bookings={bookings} />;
     else if (tab === "account") body = <AccountScreen switchRole={(r) => { setRole(r); if (r === "salon") setDashTab("overview"); if (r === "admin") setAdminTab("payments"); }} />;
   } else if (role === "salon") {
     if (dashTab === "overview") body = <DashOverview bookings={bookings} commissionRate={commissionRate} />;
     else if (dashTab === "calendar") body = <DashCalendar availability={availability} toggleSlot={toggleSlot} />;
     else if (dashTab === "earnings") body = <DashEarnings bookings={bookings} commissionRate={commissionRate} frozen={frozenSalons.has("s1")} />;
+  } else if (role === "stylist") {
+    const stylist = ALL_STYLISTS.find(s => s.id === currentStylistId);
+    body = <StylistStudio stylist={stylist} allStylists={ALL_STYLISTS} onSwitchStylist={setCurrentStylistId} myPosts={posts.filter(p => p.stylistId === currentStylistId)} onPublish={addPost} onDelete={deletePost} />;
   } else {
     if (adminTab === "payments") body = <AdminPayments bookings={bookings} commissionRate={commissionRate} />;
     else if (adminTab === "salons") body = <AdminSalons salons={SALONS} frozenSalons={frozenSalons} toggleFreeze={toggleFreeze} />;
+    else if (adminTab === "content") body = <AdminContent posts={posts} setPostStatus={setPostStatus} />;
     else if (adminTab === "settings") body = <AdminSettings commissionRate={commissionRate} setCommissionRate={setCommissionRate} feeBearer={feeBearer} setFeeBearer={setFeeBearer} />;
   }
 
@@ -580,7 +738,7 @@ export default function GlowCircleApp() {
         <span style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 600, color: "#3D1B3D" }}>Glow Circle</span>
         <span style={{ fontSize: 11, color: "#8A7A85" }}>— prototype ·</span>
         <div style={{ display: "flex", background: "#fff", borderRadius: 20, padding: 3, border: "1px solid #E4DCD9" }}>
-          {[{ id: "customer", label: "Customer" }, { id: "salon", label: "Salon" }, { id: "admin", label: "Admin" }].map(r => (
+          {[{ id: "customer", label: "Customer" }, { id: "salon", label: "Salon" }, { id: "stylist", label: "Stylist" }, { id: "admin", label: "Admin" }].map(r => (
             <button key={r.id} onClick={() => setRole(r.id)} style={{ padding: "5px 12px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: role === r.id ? "#3D1B3D" : "transparent", color: role === r.id ? "#fff" : "#8A7A85" }}>{r.label}</button>
           ))}
         </div>
@@ -596,4 +754,3 @@ export default function GlowCircleApp() {
     </div>
   );
 }
-
