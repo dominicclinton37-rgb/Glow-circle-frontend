@@ -8,7 +8,13 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
+/* ---------------------------------------------------------
+   DESIGN TOKENS
+   ink:#241B24  plum:#3D1B3D  gold:#C89B3C  blush:#F3DCE0  cream:#FBF7F2
+--------------------------------------------------------- */
+
 const naira = (n) => `₦${Math.round(n).toLocaleString("en-NG")}`;
+// Paystack NG local rate: 1.5% + ₦100, ₦100 waived under ₦2,500, fee capped at ₦2,000, borne by the salon subaccount
 const paystackFee = (amount) => Math.min(amount * 0.015 + (amount >= 2500 ? 100 : 0), 2000);
 
 const CATEGORIES = [
@@ -19,6 +25,8 @@ const CATEGORIES = [
   { id: "spa", label: "Spa", emoji: "🧖🏽‍♀️" },
 ];
 
+// Salon data now comes from Supabase (see fetchSalons in the root component).
+// Each category gets a consistent gradient since real salons don't have photo uploads yet.
 const CATEGORY_GRADIENTS = {
   hair: "linear-gradient(135deg,#3D1B3D,#7A3F5E)",
   nails: "linear-gradient(135deg,#B5476B,#EFDDB0)",
@@ -88,6 +96,8 @@ function VerifiedBadge({ level, compact }) {
   if (level === 2) return <span style={{ display: "flex", alignItems: "center", gap: 3 }}><ShieldAlert size={compact ? 12 : 16} color="#C89B3C" />{!compact && <span style={{ fontSize: 11, fontWeight: 700, color: "#8A6A21" }}>Verification in progress</span>}</span>;
   return null;
 }
+
+/* ---------------- CUSTOMER SCREENS ---------------- */
 
 function HomeScreen({ goFeed, salons }) {
   return (
@@ -241,6 +251,7 @@ function SalonProfileScreen({ salon, onBack, startBooking, posts }) {
     </div>
   );
 }
+
 function BookingFlow({ salon, service, onClose, onConfirmed, bookedSlots }) {
   const [step, setStep] = useState(1);
   const [stylist, setStylist] = useState(salon.stylists[0]);
@@ -450,6 +461,7 @@ function DashEarnings({ bookings, commissionRate, frozen }) {
     </div>
   );
 }
+
 /* ---------------- STYLIST STUDIO ---------------- */
 
 function StylistStudio({ stylist, allStylists, onSwitchStylist, myPosts, onPublish, onDelete }) {
@@ -646,170 +658,6 @@ function AdminSettings({ commissionRate, setCommissionRate, feeBearer, setFeeBea
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[{ id: "salon", label: "Salon (default)", sub: "Glow Circle keeps its full advertised commission" }, { id: "customer", label: "Customer", sub: "Added at checkout, optional future toggle" }, { id: "platform", label: "Glow Circle", sub: "Promotional campaigns only" }].map(o => (
             <button key={o.id} onClick={() => setFeeBearer(o.id)} style={{ display: "flex", alignItems: "center", gap: 10, border: feeBearer === o.id ? "2px solid #C89B3C" : "1px solid #EFE6DE", borderRadius: 14, padding: 13, background: "#fff", cursor: "pointer", textAlign: "left" }}>
-              <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{o.label}</div><div style={{ fontSize: 11, color: "#8A7A85" }}>{o.sub}</div></div>
-              {feeBearer === o.id && <Check size={16} color="#C89B3C" />}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "22px 0 10px" }}>CANCELLATION POLICY</div>
-        <div style={{ border: "1px solid #EFE6DE", borderRadius: 14, padding: 14, background: "#fff", display: "flex", flexDirection: "column", gap: 6 }}>
-          {REFUND_POLICY.map((r, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: "#8A7A85" }}>{r.window}</span><span style={{ fontWeight: 700 }}>{r.pct}% refund</span></div>))}
-        </div>
-        <div style={{ fontSize: 11, color: "#B7ACB1", marginTop: 8 }}>Paystack processing fees are non-refundable — refunds beyond the salon's net are recorded as a Glow Circle cost in the ledger, not reversed from the salon.</div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- ROOT APP ---------------- */
-
-export default function GlowCircleApp() {
-  const [role, setRole] = useState("customer");
-  const [tab, setTab] = useState("home");
-  const [dashTab, setDashTab] = useState("overview");
-  const [adminTab, setAdminTab] = useState("payments");
-  const [feedCategory, setFeedCategory] = useState(null);
-  const [activeSalon, setActiveSalon] = useState(null);
-  const [bookingCtx, setBookingCtx] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [bookedSlots, setBookedSlots] = useState(new Set());
-  const [availability, setAvailability] = useState({});
-  const [commissionRate, setCommissionRate] = useState(0.10);
-  const [feeBearer, setFeeBearer] = useState("salon");
-  const [frozenSalons, setFrozenSalons] = useState(new Set());
-  const [posts, setPosts] = useState([]);
-  const [currentStylistId, setCurrentStylistId] = useState(null);
-  const [salons, setSalons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
-
-  // Pull real salons + their services + stylists from Supabase on first load
-  useEffect(() => {
-    async function fetchSalons() {
-      const { data, error } = await supabase
-        .from("salons")
-        .select("id, name, category, verification_level, rating, reviews_count, area, services(id, name, price, duration_minutes), stylists(id, name, specialty)");
-      if (error) {
-        setLoadError(error.message);
-        setLoading(false);
-        return;
-      }
-      const mapped = (data || []).map(row => ({
-        id: row.id,
-        name: row.name,
-        category: row.category,
-        verificationLevel: row.verification_level,
-        rating: row.rating,
-        reviews: row.reviews_count,
-        area: row.area,
-        photo: gradientFor(row.category),
-        services: (row.services || []).map(sv => ({ id: sv.id, name: sv.name, price: sv.price, duration: sv.duration_minutes })),
-        stylists: (row.stylists || []).map(st => ({ id: st.id, name: st.name, specialty: st.specialty })),
-      }));
-      setSalons(mapped);
-      setLoading(false);
-    }
-    fetchSalons();
-  }, []);
-
-  const allStylists = salons.flatMap(s => s.stylists.map(st => ({ ...st, salonId: s.id, salonName: s.name, salonPhoto: s.photo })));
-
-  // Once salons load, default the Stylist Studio to the first real stylist
-  useEffect(() => {
-    if (!currentStylistId && allStylists.length > 0) setCurrentStylistId(allStylists[0].id);
-  }, [allStylists, currentStylistId]);
-
-  const confirmBooking = async (b) => {
-    setBookings(prev => [b, ...prev]);
-    setBookedSlots(prev => new Set(prev).add(`${b.stylist.id}|${b.date}|${b.slot}`));
-    const fee = paystackFee(b.service.price);
-    const commission = b.service.price * commissionRate;
-    const salonNet = b.service.price - fee - commission;
-    const { error } = await supabase.from("bookings").insert({
-      salon_id: b.salon.id,
-      stylist_id: b.stylist.id,
-      service_id: b.service.id,
-      customer_name: "Jasmine T.",
-      booking_date: b.date,
-      time_slot: b.slot,
-      status: "confirmed",
-      gross_amount: b.service.price,
-      commission_amount: Math.round(commission),
-      paystack_fee: Math.round(fee),
-      salon_net: Math.round(salonNet),
-      payment_method: b.payMethod || "card",
-    });
-    if (error) console.error("Booking failed to save:", error.message);
-  };
-
-  const toggleSlot = (d, t) => setAvailability(prev => ({ ...prev, [`${d}|${t}`]: prev[`${d}|${t}`] === false ? true : false }));
-  const toggleFreeze = (id) => setFrozenSalons(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const addPost = (post) => setPosts(prev => [{ id: `p${Date.now()}`, status: "pending", ...post }, ...prev]);
-  const setPostStatus = (id, status) => setPosts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
-  const deletePost = (id) => setPosts(prev => prev.filter(p => p.id !== id));
-  const goFeed = (cat, salon) => { setFeedCategory(cat); if (salon) { setActiveSalon(salon); setTab("profile"); } else setTab("feed"); };
-
-  const customerTabs = [{ id: "home", label: "Home", icon: Home }, { id: "feed", label: "Discover", icon: Grid3x3 }, { id: "bookings", label: "Bookings", icon: Calendar }, { id: "account", label: "Account", icon: User }];
-  const dashTabs = [{ id: "overview", label: "Today", icon: Home }, { id: "calendar", label: "Calendar", icon: Calendar }, { id: "earnings", label: "Earnings", icon: DollarSign }];
-  const adminTabs = [{ id: "payments", label: "Payments", icon: DollarSign }, { id: "salons", label: "Salons", icon: Store }, { id: "content", label: "Content", icon: ImageIcon }, { id: "settings", label: "Settings", icon: Settings }];
-
-  let body;
-  if (loading) {
-    body = <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10 }}>
-      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, color: "#3D1B3D" }}>Loading salons…</div>
-      <div style={{ fontSize: 12, color: "#B7ACB1" }}>Connecting to Glow Circle's database</div>
-    </div>;
-  } else if (loadError) {
-    body = <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10, padding: 20, textAlign: "center" }}>
-      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, color: "#B23B3B" }}>Couldn't load data</div>
-      <div style={{ fontSize: 12, color: "#8A7A85" }}>{loadError}</div>
-      <div style={{ fontSize: 11, color: "#B7ACB1" }}>Check that supabaseClient.js has your real project URL and anon key.</div>
-    </div>;
-  } else if (role === "customer") {
-    if (tab === "home") body = <HomeScreen goFeed={goFeed} salons={salons} />;
-    else if (tab === "feed") body = <FeedScreen category={feedCategory} setCategory={setFeedCategory} goProfile={(s) => { setActiveSalon(s); setTab("profile"); }} posts={posts} salons={salons} />;
-    else if (tab === "profile") body = <SalonProfileScreen salon={activeSalon} onBack={() => setTab("feed")} startBooking={(salon, service) => setBookingCtx({ salon, service })} posts={posts} />;
-    else if (tab === "bookings") body = <BookingsScreen bookings={bookings} />;
-    else if (tab === "account") body = <AccountScreen switchRole={(r) => { setRole(r); if (r === "salon") setDashTab("overview"); if (r === "admin") setAdminTab("payments"); }} />;
-  } else if (role === "salon") {
-    if (dashTab === "overview") body = <DashOverview bookings={bookings} commissionRate={commissionRate} />;
-    else if (dashTab === "calendar") body = <DashCalendar availability={availability} toggleSlot={toggleSlot} />;
-    else if (dashTab === "earnings") body = <DashEarnings bookings={bookings} commissionRate={commissionRate} frozen={frozenSalons.has("s1")} />;
-  } else if (role === "stylist") {
-    const stylist = allStylists.find(s => s.id === currentStylistId);
-    body = stylist
-      ? <StylistStudio stylist={stylist} allStylists={allStylists} onSwitchStylist={setCurrentStylistId} myPosts={posts.filter(p => p.stylistId === currentStylistId)} onPublish={addPost} onDelete={deletePost} />
-      : <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>No stylists found.</div></div>;
-  } else {
-    if (adminTab === "payments") body = <AdminPayments bookings={bookings} commissionRate={commissionRate} />;
-    else if (adminTab === "salons") body = <AdminSalons salons={salons} frozenSalons={frozenSalons} toggleFreeze={toggleFreeze} />;
-    else if (adminTab === "content") body = <AdminContent posts={posts} setPostStatus={setPostStatus} salons={salons} />;
-    else if (adminTab === "settings") body = <AdminSettings commissionRate={commissionRate} setCommissionRate={setCommissionRate} feeBearer={feeBearer} setFeeBearer={setFeeBearer} />;
-  }
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#EFE6DE", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 12px", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 600, color: "#3D1B3D" }}>Glow Circle</span>
-        <span style={{ fontSize: 11, color: "#8A7A85" }}>— prototype ·</span>
-        <div style={{ display: "flex", background: "#fff", borderRadius: 20, padding: 3, border: "1px solid #E4DCD9" }}>
-          {[{ id: "customer", label: "Customer" }, { id: "salon", label: "Salon" }, { id: "stylist", label: "Stylist" }, { id: "admin", label: "Admin" }].map(r => (
-            <button key={r.id} onClick={() => setRole(r.id)} style={{ padding: "5px 12px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: role === r.id ? "#3D1B3D" : "transparent", color: role === r.id ? "#fff" : "#8A7A85" }}>{r.label}</button>
-          ))}
-        </div>
-      </div>
-
-      <PhoneFrame>
-        {body}
-        {bookingCtx && (<BookingFlow salon={bookingCtx.salon} service={bookingCtx.service} bookedSlots={bookedSlots} onClose={() => { setBookingCtx(null); setTab("bookings"); }} onConfirmed={confirmBooking} />)}
-        {role === "customer" && <BottomNav tab={tab} setTab={setTab} tabs={customerTabs} />}
-        {role === "salon" && <BottomNav tab={dashTab} setTab={setDashTab} tabs={dashTabs} />}
-        {role === "admin" && <BottomNav tab={adminTab} setTab={setAdminTab} tabs={adminTabs} />}
-      </PhoneFrame>
-    </div>
-  );
-}
               <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{o.label}</div><div style={{ fontSize: 11, color: "#8A7A85" }}>{o.sub}</div></div>
               {feeBearer === o.id && <Check size={16} color="#C89B3C" />}
             </button>
