@@ -277,6 +277,7 @@ function BookingFlow({ salon, service, onClose, onConfirmed, bookedSlots }) {
                 {stylist.id === st.id && <Check size={18} color="#C89B3C" style={{ marginLeft: "auto" }} />}
               </button>
             ))}
+            <button onClick={() => setStep(2)} style={{ marginTop: 10, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Continue</button>
           </div>
         )}
         {step === 2 && (
