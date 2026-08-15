@@ -36,8 +36,6 @@ const CATEGORY_GRADIENTS = {
 };
 const gradientFor = (category) => CATEGORY_GRADIENTS[category] || CATEGORY_GRADIENTS.hair;
 
-const inputStyle = { padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, background: "#fff", fontFamily: "inherit" };
-
 const TIME_SLOTS = ["9:00 AM", "10:30 AM", "12:00 PM", "1:30 PM", "3:00 PM", "4:30 PM", "6:00 PM"];
 const DATES = ["Today", "Tomorrow", "Wed 12", "Thu 13", "Fri 14"];
 const PAY_METHODS = [
@@ -98,41 +96,25 @@ function VerifiedBadge({ level, compact }) {
   if (level === 2) return <span style={{ display: "flex", alignItems: "center", gap: 3 }}><ShieldAlert size={compact ? 12 : 16} color="#C89B3C" />{!compact && <span style={{ fontSize: 11, fontWeight: 700, color: "#8A6A21" }}>Verification in progress</span>}</span>;
   return null;
 }
-function LoadingBlock({ label = "Loading…" }) {
-  return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>{label}</div></div>;
-}
 
 /* ---------------- CUSTOMER SCREENS ---------------- */
 
 /* ---------------- AUTH ---------------- */
 
-function RoleToggle({ role, setRole }) {
-  return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-      {[{ id: "customer", label: "I'm a customer" }, { id: "salon_owner", label: "I'm a salon owner" }].map(o => (
-        <button key={o.id} type="button" onClick={() => setRole(o.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 12, cursor: "pointer", fontSize: 12, fontWeight: 700, border: role === o.id ? "2px solid #C89B3C" : "1px solid #EFE6DE", background: role === o.id ? "#FBF3E0" : "#fff", color: role === o.id ? "#8A6A21" : "#241B24" }}>{o.label}</button>
-      ))}
-    </div>
-  );
-}
-
-function AuthScreen({ onAuthed }) {
+function AuthScreen({ onAuthed, roleHint, subtitle }) {
   const [mode, setMode] = useState("login"); // "login" | "signup"
-  const [signupRole, setSignupRole] = useState("customer");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    setError(""); setInfo(""); setBusy(true);
+    setError(""); setBusy(true);
     if (mode === "signup") {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, role: signupRole } } });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, role: roleHint || "customer" } } });
       if (error) setError(error.message);
-      else if (data.session) onAuthed(data.session);
-      else setInfo("Check your email to confirm your account, then log in below.");
+      else if (data.user) onAuthed(data.session);
     } else {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError(error.message);
@@ -144,30 +126,115 @@ function AuthScreen({ onAuthed }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
       <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600, textAlign: "center" }}>Glow Circle</div>
-      <div style={{ fontSize: 13, color: "#8A7A85", textAlign: "center", marginTop: 6, marginBottom: 26 }}>{mode === "login" ? "Welcome back" : "Create your account to get started"}</div>
+      <div style={{ fontSize: 13, color: "#8A7A85", textAlign: "center", marginTop: 6, marginBottom: 26 }}>{subtitle || (mode === "login" ? "Welcome back" : "Create your account to book")}</div>
 
-      {mode === "signup" && <RoleToggle role={signupRole} setRole={setSignupRole} />}
-      {mode === "signup" && signupRole === "salon_owner" && (
-        <div style={{ fontSize: 11.5, color: "#8A6A21", background: "#FBF3E0", borderRadius: 10, padding: "8px 10px", marginBottom: 10, lineHeight: 1.4 }}>
-          You'll set up your salon profile next. Glow Circle reviews every new salon before it goes live in the marketplace.
-        </div>
-      )}
       {mode === "signup" && (
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" style={{ ...inputStyle, marginBottom: 10 }} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 10, background: "#fff" }} />
       )}
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" autoCapitalize="none" style={{ ...inputStyle, marginBottom: 10 }} />
-      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" style={{ ...inputStyle, marginBottom: 6 }} />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" autoCapitalize="none" style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 10, background: "#fff" }} />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 6, background: "#fff" }} />
 
-      {info && <div style={{ fontSize: 12, color: "#3C6B2F", marginTop: 6 }}>{info}</div>}
       {error && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 6 }}>{error}</div>}
 
       <button onClick={submit} disabled={busy || !email || !password} style={{ marginTop: 16, padding: "14px", borderRadius: 14, border: "none", background: busy ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: busy ? "default" : "pointer" }}>
-        {busy ? "Please wait…" : mode === "login" ? "Log in" : signupRole === "salon_owner" ? "Create salon owner account" : "Create account"}
+        {busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
       </button>
 
-      <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }} style={{ marginTop: 16, background: "none", border: "none", color: "#8A6A21", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+      <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }} style={{ marginTop: 16, background: "none", border: "none", color: "#8A6A21", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
         {mode === "login" ? "New here? Create an account" : "Already have an account? Log in"}
       </button>
+    </div>
+  );
+}
+
+function SalonOnboarding({ session, onSubmitted }) {
+  const [salonName, setSalonName] = useState("");
+  const [category, setCategory] = useState("hair");
+  const [area, setArea] = useState("");
+  const [city, setCity] = useState("Lagos");
+  const [serviceName, setServiceName] = useState("");
+  const [servicePrice, setServicePrice] = useState("");
+  const [stylistName, setStylistName] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setError(""); setBusy(true);
+    await supabase.from("profiles").update({ role: "salon_owner" }).eq("id", session.user.id);
+    const { data: salon, error: salonErr } = await supabase
+      .from("salons")
+      .insert({ name: salonName, category, area, city, owner_id: session.user.id, verification_level: 2, rating: 0, reviews_count: 0 })
+      .select().single();
+    if (salonErr) { setError(salonErr.message); setBusy(false); return; }
+    if (serviceName && servicePrice) {
+      await supabase.from("services").insert({ salon_id: salon.id, name: serviceName, price: Number(servicePrice), duration_minutes: 60 });
+    }
+    if (stylistName) {
+      await supabase.from("stylists").insert({ salon_id: salon.id, name: stylistName, specialty: "" });
+    }
+    setBusy(false);
+    onSubmitted(salon);
+  };
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "22px 20px" }}>
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 600 }}>Become a Salon Partner</div>
+      <div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 6, marginBottom: 20 }}>Tell us about your salon. Your listing goes live once Glow Circle approves it.</div>
+
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", marginBottom: 6 }}>SALON NAME</div>
+      <input value={salonName} onChange={(e) => setSalonName(e.target.value)} placeholder="e.g. Crown & Coil Studio" style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 14, background: "#fff" }} />
+
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", marginBottom: 6 }}>CATEGORY</div>
+      <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 14, background: "#fff" }}>
+        {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+      </select>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", marginBottom: 6 }}>AREA</div>
+          <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Lekki Phase 1" style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 14, background: "#fff" }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", marginBottom: 6 }}>CITY</div>
+          <select value={city} onChange={(e) => setCity(e.target.value)} style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 14, background: "#fff" }}>
+            {["Lagos", "Abuja", "Owerri", "Port Harcourt", "Calabar", "Bayelsa"].map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", margin: "8px 0 6px" }}>ONE SERVICE TO START (optional, add more later)</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Service name" style={{ flex: 2, padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 14, background: "#fff" }} />
+        <input value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="Price (₦)" type="number" style={{ flex: 1, padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 14, background: "#fff" }} />
+      </div>
+
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", marginBottom: 6 }}>A STYLIST (optional)</div>
+      <input value={stylistName} onChange={(e) => setStylistName(e.target.value)} placeholder="Stylist name" style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 6, background: "#fff" }} />
+
+      {error && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 8 }}>{error}</div>}
+
+      <button onClick={submit} disabled={busy || !salonName || !area} style={{ marginTop: 18, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: busy ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: busy ? "default" : "pointer" }}>
+        {busy ? "Submitting…" : "Submit application"}
+      </button>
+    </div>
+  );
+}
+
+function SalonPending({ salon }) {
+  const label = salon.status === "rejected" ? "Application not approved" : "Application submitted";
+  const tone = salon.status === "rejected" ? "#B23B3B" : "#8A6A21";
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 30px", textAlign: "center" }}>
+      <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FBF3E0", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+        <Store size={26} color={tone} />
+      </div>
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 600, color: tone }}>{label}</div>
+      <div style={{ fontSize: 13, color: "#8A7A85", marginTop: 8 }}>{salon.name} · {salon.area}</div>
+      <div style={{ fontSize: 12, color: "#B7ACB1", marginTop: 12, lineHeight: 1.5 }}>
+        {salon.status === "rejected"
+          ? "Reach out to Glow Circle support for details on what to update and resubmit."
+          : "Glow Circle reviews new salons before they go live to customers. You'll be able to manage your dashboard here once approved."}
+      </div>
     </div>
   );
 }
@@ -426,7 +493,7 @@ function BookingsScreen({ bookings }) {
   );
 }
 
-function AccountScreen({ switchRole, user, onSignOut, isSalonOwner }) {
+function AccountScreen({ switchRole, user, onSignOut }) {
   const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Customer";
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
@@ -442,176 +509,37 @@ function AccountScreen({ switchRole, user, onSignOut, isSalonOwner }) {
           ))}
         </div>
         <button onClick={onSignOut} style={{ marginTop: 22, width: "100%", padding: "13px", borderRadius: 14, border: "1px solid #F5E1E1", background: "#fff", color: "#B23B3B", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Sign out</button>
-
-        {isSalonOwner ? (
-          <button onClick={() => switchRole("salon")} style={{ marginTop: 22, width: "100%", padding: "13px", borderRadius: 14, border: "1px solid #C89B3C", background: "#FBF3E0", color: "#8A6A21", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Go to my salon dashboard →</button>
-        ) : (
-          <div style={{ fontSize: 11.5, color: "#B7ACB1", marginTop: 22, lineHeight: 1.5 }}>Own a salon? Sign out and create a new account, choosing "I'm a salon owner" at signup.</div>
-        )}
-
         <div style={{ fontSize: 11, color: "#B7ACB1", marginTop: 22, marginBottom: 6 }}>DEMO — for testing other roles:</div>
-        <button onClick={() => switchRole("admin")} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1px dashed #3D1B3D", background: "#EFE1EA", color: "#3D1B3D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Switch to Admin view (demo) →</button>
+        <button onClick={() => switchRole("salon")} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1px dashed #C89B3C", background: "#FBF3E0", color: "#8A6A21", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Switch to Salon Owner view →</button>
+        <button onClick={() => switchRole("admin")} style={{ marginTop: 10, width: "100%", padding: "13px", borderRadius: 14, border: "1px dashed #3D1B3D", background: "#EFE1EA", color: "#3D1B3D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Switch to Admin view →</button>
       </div>
     </div>
   );
 }
 
-/* ---------------- SALON OWNER: SIGN UP → ONBOARDING → APPROVAL ---------------- */
+/* ---------------- SALON DASHBOARD ---------------- */
 
-function SalonOnboarding({ session, onCreated }) {
-  const [form, setForm] = useState({ name: "", category: "hair", area: "", address: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const submit = async () => {
-    if (!form.name.trim() || !form.area.trim()) { setError("Salon name and area are required."); return; }
-    setBusy(true); setError("");
-    const { data, error } = await supabase
-      .from("salons")
-      .insert({ name: form.name.trim(), category: form.category, area: form.area.trim(), owner_id: session.user.id, status: "pending" })
-      .select()
-      .single();
-    setBusy(false);
-    if (error) setError(error.message);
-    else onCreated(data);
-  };
-
-  return (
-    <div style={{ flex: 1, overflowY: "auto" }}>
-      <TopBar title="Set up your salon" />
-      <div style={{ padding: "0 20px 24px" }}>
-        <div style={{ fontSize: 12.5, color: "#8A7A85", marginBottom: 16, lineHeight: 1.5 }}>
-          Tell us about your salon. Glow Circle reviews every application before it appears in the marketplace — usually within 1–2 business days.
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Salon name" style={inputStyle} />
-          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-          <input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="Area (e.g. Lekki Phase 1, Lagos)" style={inputStyle} />
-          <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Full address (optional for now)" style={inputStyle} />
-        </div>
-        {error && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 10 }}>{error}</div>}
-        <button onClick={submit} disabled={busy} style={{ marginTop: 18, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: busy ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: busy ? "default" : "pointer" }}>
-          {busy ? "Submitting…" : "Submit application"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SalonPending({ salon, onUpdated, onSignOut }) {
-  const [form, setForm] = useState({ name: salon.name, category: salon.category, area: salon.area });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  const save = async () => {
-    if (!form.name.trim() || !form.area.trim()) { setError("Salon name and area are required."); return; }
-    setBusy(true); setError(""); setSaved(false);
-    const { data, error } = await supabase
-      .from("salons")
-      .update({ name: form.name.trim(), category: form.category, area: form.area.trim() })
-      .eq("id", salon.id)
-      .select()
-      .single();
-    setBusy(false);
-    if (error) setError(error.message);
-    else { onUpdated(data); setSaved(true); }
-  };
-
-  return (
-    <div style={{ flex: 1, overflowY: "auto" }}>
-      <TopBar title="Application status" right={<button onClick={onSignOut} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "#B23B3B" }}>Sign out</button>} />
-      <div style={{ padding: "0 20px 24px" }}>
-        <div style={{ border: "1px solid #EFE6DE", borderRadius: 16, padding: 16, background: "#FBF3E0", marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><ShieldAlert size={16} color="#C89B3C" /><span style={{ fontWeight: 800, fontSize: 13, color: "#8A6A21" }}>Awaiting Glow Circle approval</span></div>
-          <div style={{ fontSize: 12, color: "#8A7A85", marginTop: 8, lineHeight: 1.5 }}>Your application is under review. You can still update your details below — you'll be notified once approved.</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Salon name" style={inputStyle} />
-          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-          <input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="Area" style={inputStyle} />
-        </div>
-        {error && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 10 }}>{error}</div>}
-        {saved && !error && <div style={{ fontSize: 12, color: "#3C6B2F", marginTop: 10 }}>Saved.</div>}
-        <button onClick={save} disabled={busy} style={{ marginTop: 18, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: busy ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: busy ? "default" : "pointer" }}>
-          {busy ? "Saving…" : "Save changes"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SalonOwnerHome({ salon, onRefresh, onSignOut }) {
-  const [svc, setSvc] = useState({ name: "", price: "", duration_minutes: "60" });
-  const [sty, setSty] = useState({ name: "", specialty: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const addService = async () => {
-    if (!svc.name.trim() || !svc.price) { setError("Service name and price are required."); return; }
-    setBusy(true); setError("");
-    const { error } = await supabase.from("services").insert({ salon_id: salon.id, name: svc.name.trim(), price: Number(svc.price), duration_minutes: Number(svc.duration_minutes) || 60 });
-    setBusy(false);
-    if (error) setError(error.message);
-    else { setSvc({ name: "", price: "", duration_minutes: "60" }); onRefresh(); }
-  };
-  const addStylist = async () => {
-    if (!sty.name.trim()) { setError("Stylist name is required."); return; }
-    setBusy(true); setError("");
-    const { error } = await supabase.from("stylists").insert({ salon_id: salon.id, name: sty.name.trim(), specialty: sty.specialty.trim() || null });
-    setBusy(false);
-    if (error) setError(error.message);
-    else { setSty({ name: "", specialty: "" }); onRefresh(); }
-  };
-
+function DashOverview({ bookings, commissionRate, salon }) {
+  const pending = bookings.reduce((s, b) => s + (b.service.price - b.service.price * commissionRate - paystackFee(b.service.price)), 0);
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <div style={{ padding: "22px 20px 6px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 13, color: "#8A7A85", fontWeight: 600 }}>{salon.area}</div>
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 600 }}>{salon.name}</div>
-            <div style={{ marginTop: 6 }}><VerifiedBadge level={salon.verification_level || 1} /></div>
-          </div>
-          <button onClick={onSignOut} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "#B23B3B" }}>Sign out</button>
-        </div>
+        <div style={{ fontSize: 13, color: "#8A7A85", fontWeight: 600 }}>{salon ? `${salon.name} · ${salon.area}` : "Your Salon"}</div>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600 }}>Today's schedule</div>
       </div>
-      <div style={{ padding: "16px 20px" }}>
-        {error && <div style={{ fontSize: 12, color: "#B23B3B", marginBottom: 10 }}>{error}</div>}
-
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", marginBottom: 10 }}>ADD A SERVICE</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, border: "1px solid #EFE6DE", borderRadius: 14, padding: 14, background: "#fff" }}>
-          <input value={svc.name} onChange={(e) => setSvc({ ...svc, name: e.target.value })} placeholder="Service name (e.g. Silk press)" style={inputStyle} />
-          <div style={{ display: "flex", gap: 8 }}>
-            <input value={svc.price} onChange={(e) => setSvc({ ...svc, price: e.target.value })} placeholder="Price (₦)" inputMode="numeric" style={{ ...inputStyle, flex: 1 }} />
-            <input value={svc.duration_minutes} onChange={(e) => setSvc({ ...svc, duration_minutes: e.target.value })} placeholder="Minutes" inputMode="numeric" style={{ ...inputStyle, flex: 1 }} />
-          </div>
-          <button onClick={addService} disabled={busy} style={{ padding: "11px", borderRadius: 10, border: "none", background: "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Add service</button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-          {(salon.services || []).map(s => (
-            <div key={s.id} style={{ display: "flex", justifyContent: "space-between", border: "1px solid #EFE6DE", borderRadius: 12, padding: "10px 12px", background: "#fff" }}>
-              <div><div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div><div style={{ fontSize: 11, color: "#8A7A85" }}>{s.duration_minutes} min</div></div>
-              <div style={{ fontWeight: 800, fontSize: 13 }}>{naira(s.price)}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "22px 0 10px" }}>ADD A STYLIST</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, border: "1px solid #EFE6DE", borderRadius: 14, padding: 14, background: "#fff" }}>
-          <input value={sty.name} onChange={(e) => setSty({ ...sty, name: e.target.value })} placeholder="Stylist name" style={inputStyle} />
-          <input value={sty.specialty} onChange={(e) => setSty({ ...sty, specialty: e.target.value })} placeholder="Specialty (optional)" style={inputStyle} />
-          <button onClick={addStylist} disabled={busy} style={{ padding: "11px", borderRadius: 10, border: "none", background: "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Add stylist</button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-          {(salon.stylists || []).map(st => (
-            <div key={st.id} style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid #EFE6DE", borderRadius: 12, padding: "10px 12px", background: "#fff" }}>
-              <GlowRing size={36}><div style={{ width: "100%", height: "100%", background: gradientFor(salon.category), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>{st.name[0]}</div></GlowRing>
-              <div><div style={{ fontWeight: 700, fontSize: 13 }}>{st.name}</div><div style={{ fontSize: 11, color: "#8A7A85" }}>{st.specialty}</div></div>
+      <div style={{ display: "flex", gap: 10, padding: "16px 20px 4px" }}>
+        <StatCard label="Bookings today" value={String(bookings.length)} icon={Calendar} />
+        <StatCard label="Pending balance" value={naira(pending)} icon={DollarSign} />
+      </div>
+      <div style={{ padding: "18px 20px" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", marginBottom: 10 }}>UPCOMING</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {bookings.length === 0 && <div style={{ fontSize: 12.5, color: "#B7ACB1" }}>No bookings yet today.</div>}
+          {bookings.map((b, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid #EFE6DE", borderRadius: 14, padding: 12, background: "#fff" }}>
+              <GlowRing size={40}><div style={{ width: "100%", height: "100%", background: b.salon.photo, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>{b.stylist.name[0]}</div></GlowRing>
+              <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13 }}>{b.service.name}</div><div style={{ fontSize: 11.5, color: "#8A7A85" }}>{b.stylist.name} · {b.date} {b.slot}</div></div>
+              <span style={{ fontWeight: 800, fontSize: 13 }}>{naira(b.service.price)}</span>
             </div>
           ))}
         </div>
@@ -619,15 +547,15 @@ function SalonOwnerHome({ salon, onRefresh, onSignOut }) {
     </div>
   );
 }
-
-/* ---------------- SALON DASHBOARD (demo screens — real data comes later) ---------------- */
-
+function StatCard({ label, value, icon: Icon }) {
+  return (<div style={{ flex: 1, border: "1px solid #EFE6DE", borderRadius: 16, padding: 14, background: "#fff" }}><Icon size={16} color="#C89B3C" /><div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 600, marginTop: 8 }}>{value}</div><div style={{ fontSize: 11, color: "#8A7A85", fontWeight: 600 }}>{label}</div></div>);
+}
 function DashCalendar({ availability, toggleSlot }) {
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <TopBar title="Availability" />
       <div style={{ padding: "0 20px 20px" }}>
-        <div style={{ fontSize: 12.5, color: "#8A7A85", marginBottom: 14 }}>Tap a slot to open or block it. (Demo — not yet wired to real bookings.)</div>
+        <div style={{ fontSize: 12.5, color: "#8A7A85", marginBottom: 14 }}>Tap a slot to open or block it. Changes apply instantly across the customer app.</div>
         {DATES.map(d => (
           <div key={d} style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", marginBottom: 8 }}>{d.toUpperCase()}</div>
@@ -640,9 +568,6 @@ function DashCalendar({ availability, toggleSlot }) {
     </div>
   );
 }
-function StatCard({ label, value, icon: Icon }) {
-  return (<div style={{ flex: 1, border: "1px solid #EFE6DE", borderRadius: 16, padding: 14, background: "#fff" }}><Icon size={16} color="#C89B3C" /><div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 600, marginTop: 8 }}>{value}</div><div style={{ fontSize: 11, color: "#8A7A85", fontWeight: 600 }}>{label}</div></div>);
-}
 function DashEarnings({ bookings, commissionRate, frozen }) {
   const gross = bookings.reduce((sum, b) => sum + b.service.price, 0);
   const commission = gross * commissionRate;
@@ -652,7 +577,6 @@ function DashEarnings({ bookings, commissionRate, frozen }) {
     <div style={{ flex: 1, overflowY: "auto" }}>
       <TopBar title="Earnings & Payouts" />
       <div style={{ padding: "0 20px 24px" }}>
-        <div style={{ fontSize: 11, color: "#B7ACB1", marginBottom: 10 }}>Demo — not yet scoped to your real bookings.</div>
         {frozen && (<div style={{ display: "flex", alignItems: "center", gap: 8, background: "#F5E1E1", color: "#A33D3D", borderRadius: 14, padding: 12, marginBottom: 14, fontSize: 12, fontWeight: 700 }}><Lock size={14} /> Payouts are currently frozen by Glow Circle admin. Contact support.</div>)}
         <div style={{ borderRadius: 20, padding: 20, background: "linear-gradient(135deg,#3D1B3D,#241B24)", color: "#fff" }}>
           <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 600 }}>Available for payout</div>
@@ -666,6 +590,16 @@ function DashEarnings({ bookings, commissionRate, frozen }) {
           <Row label="Paystack processing fee" value={`–${naira(fees)}`} muted />
           <div style={{ height: 1, background: "#EFE6DE", margin: "10px 0" }} />
           <Row label="Your net payout" value={naira(net)} />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "20px 0 10px" }}>TRANSACTIONS</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {bookings.length === 0 && <div style={{ fontSize: 12.5, color: "#B7ACB1" }}>No transactions yet this period.</div>}
+          {bookings.map((b, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #EFE6DE", borderRadius: 14, padding: 12, background: "#fff" }}>
+              <div><div style={{ fontWeight: 700, fontSize: 13 }}>{b.service.name}</div><div style={{ fontSize: 11, color: "#8A7A85" }}>{b.date} · {b.slot}</div></div>
+              <div style={{ textAlign: "right" }}><div style={{ fontWeight: 800, fontSize: 13 }}>+{naira(b.service.price - b.service.price * commissionRate - paystackFee(b.service.price))}</div><div style={{ fontSize: 10.5, color: "#B7ACB1" }}>net of fees</div></div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -747,7 +681,7 @@ function StylistStudio({ stylist, allStylists, onSwitchStylist, myPosts, onPubli
   );
 }
 
-/* ---------------- ADMIN DASHBOARD (still demo — Phase 1 next task) ---------------- */
+/* ---------------- ADMIN DASHBOARD ---------------- */
 
 function AdminPayments({ bookings, commissionRate }) {
   const gross = bookings.reduce((s, b) => s + b.service.price, 0);
@@ -793,25 +727,39 @@ function AdminPayments({ bookings, commissionRate }) {
   );
 }
 
-function AdminSalons({ salons, frozenSalons, toggleFreeze }) {
+function AdminSalons({ salons, frozenSalons, toggleFreeze, onApprove, onReject }) {
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <TopBar title="Salons" />
       <div style={{ padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {salons.length === 0 && <div style={{ fontSize: 12.5, color: "#B7ACB1", marginTop: 20 }}>No salon applications yet.</div>}
         {salons.map(s => {
           const isFrozen = frozenSalons.has(s.id);
           return (
             <div key={s.id} style={{ border: "1px solid #EFE6DE", borderRadius: 14, padding: 12, background: "#fff" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{s.name}</div>
-                  <div style={{ fontSize: 11.5, color: "#8A7A85", marginTop: 2 }}>{s.area}</div>
-                  <div style={{ marginTop: 6 }}><VerifiedBadge level={s.verificationLevel} /></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{s.name}</div>
+                    {s.status === "pending" && <Pill tone="gold">Pending</Pill>}
+                    {s.status === "rejected" && <Pill tone="red">Rejected</Pill>}
+                    {s.status === "approved" && <Pill tone="green">Approved</Pill>}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#8A7A85", marginTop: 2 }}>{s.area}{s.city ? `, ${s.city}` : ""}</div>
+                  {s.status === "approved" && <div style={{ marginTop: 6 }}><VerifiedBadge level={s.verificationLevel} /></div>}
                 </div>
-                <button onClick={() => toggleFreeze(s.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, border: "1px solid #EFE6DE", background: isFrozen ? "#F5E1E1" : "#fff", color: isFrozen ? "#A33D3D" : "#3D1B3D", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
-                  {isFrozen ? <Unlock size={13} /> : <Lock size={13} />} {isFrozen ? "Unfreeze" : "Freeze payouts"}
-                </button>
+                {s.status === "approved" && (
+                  <button onClick={() => toggleFreeze(s.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, border: "1px solid #EFE6DE", background: isFrozen ? "#F5E1E1" : "#fff", color: isFrozen ? "#A33D3D" : "#3D1B3D", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
+                    {isFrozen ? <Unlock size={13} /> : <Lock size={13} />} {isFrozen ? "Unfreeze" : "Freeze payouts"}
+                  </button>
+                )}
               </div>
+              {s.status === "pending" && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => onApprove(s.id)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "none", background: "#3D1B3D", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Approve</button>
+                  <button onClick={() => onReject(s.id)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", color: "#B23B3B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Reject</button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -910,6 +858,7 @@ export default function GlowCircleApp() {
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
   const [mySalon, setMySalon] = useState(null);
+  const [pendingSalons, setPendingSalons] = useState([]);
 
   // Check for an existing logged-in session, and keep it in sync
   useEffect(() => {
@@ -918,12 +867,45 @@ export default function GlowCircleApp() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // Once logged in, find out this person's role and whether they already have a salon application
+  useEffect(() => {
+    if (!session) { setProfile(null); setMySalon(null); return; }
+    async function loadProfile() {
+      const { data: prof } = await supabase.from("profiles").select("id, role, name").eq("id", session.user.id).single();
+      setProfile(prof);
+      const { data: salon } = await supabase.from("salons").select("id, name, category, area, city, status, verification_level").eq("owner_id", session.user.id).maybeSingle();
+      setMySalon(salon || null);
+    }
+    loadProfile();
+  }, [session]);
+
+  const refreshPendingSalons = () => {
+    supabase.from("salons").select("id, name, category, area, city, status, verification_level").order("created_at", { ascending: false }).then(({ data }) => setPendingSalons(data || []));
+  };
+
+  // Admins see every salon application (pending/approved/rejected) here, not just approved ones
+  useEffect(() => {
+    if (role === "admin" && adminTab === "salons" && profile?.role === "admin") refreshPendingSalons();
+  }, [role, adminTab, profile]);
+
+  const approveSalon = async (id) => { await supabase.from("salons").update({ status: "approved" }).eq("id", id); refreshPendingSalons(); };
+  const rejectSalon = async (id) => { await supabase.from("salons").update({ status: "rejected" }).eq("id", id); refreshPendingSalons(); };
+
+  const [salonBookings, setSalonBookings] = useState([]);
+  useEffect(() => {
+    if (!mySalon || mySalon.status !== "approved") { setSalonBookings([]); return; }
+    supabase.from("bookings").select("id, booking_date, time_slot, gross_amount, stylists(name), services(name)").eq("salon_id", mySalon.id).order("created_at", { ascending: false }).then(({ data }) => {
+      setSalonBookings((data || []).map(b => ({ salon: mySalon, stylist: { name: b.stylists?.name }, service: { name: b.services?.name, price: b.gross_amount }, date: b.booking_date, slot: b.time_slot })));
+    });
+  }, [mySalon]);
+
   // Pull real salons + their services + stylists from Supabase on first load
   useEffect(() => {
     async function fetchSalons() {
       const { data, error } = await supabase
         .from("salons")
-        .select("id, name, category, verification_level, rating, reviews_count, area, services(id, name, price, duration_minutes), stylists(id, name, specialty)");
+        .select("id, name, category, verification_level, rating, reviews_count, area, services(id, name, price, duration_minutes), stylists(id, name, specialty)")
+        .eq("status", "approved");
       if (error) {
         setLoadError(error.message);
         setLoading(false);
@@ -946,35 +928,6 @@ export default function GlowCircleApp() {
     }
     fetchSalons();
   }, []);
-
-  // Load this user's profile (real role) whenever the session changes
-  useEffect(() => {
-    if (!session) { setProfile(null); setMySalon(null); return; }
-    async function loadProfile() {
-      const { data } = await supabase.from("profiles").select("id, role, name").eq("id", session.user.id).single();
-      setProfile(data || null);
-    }
-    loadProfile();
-  }, [session]);
-
-  // A confirmed salon-owner account should land on the salon dashboard, not the customer home tab
-  useEffect(() => {
-    if (profile?.role === "salon_owner") setRole("salon");
-  }, [profile]);
-
-  const loadMySalon = async () => {
-    if (!session) return;
-    const { data } = await supabase
-      .from("salons")
-      .select("id, name, category, area, status, verification_level, services(id,name,price,duration_minutes), stylists(id,name,specialty)")
-      .eq("owner_id", session.user.id)
-      .maybeSingle();
-    setMySalon(data || null);
-  };
-  useEffect(() => {
-    if (profile?.role === "salon_owner") loadMySalon();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
 
   const allStylists = salons.flatMap(s => s.stylists.map(st => ({ ...st, salonId: s.id, salonName: s.name, salonPhoto: s.photo })));
 
@@ -1032,10 +985,8 @@ export default function GlowCircleApp() {
   const goFeed = (cat, salon) => { setFeedCategory(cat); if (salon) { setActiveSalon(salon); setTab("profile"); } else setTab("feed"); };
 
   const customerTabs = [{ id: "home", label: "Home", icon: Home }, { id: "feed", label: "Discover", icon: Grid3x3 }, { id: "bookings", label: "Bookings", icon: Calendar }, { id: "account", label: "Account", icon: User }];
-  const dashTabs = [{ id: "overview", label: "My Salon", icon: Home }, { id: "calendar", label: "Calendar", icon: Calendar }, { id: "earnings", label: "Earnings", icon: DollarSign }];
+  const dashTabs = [{ id: "overview", label: "Today", icon: Home }, { id: "calendar", label: "Calendar", icon: Calendar }, { id: "earnings", label: "Earnings", icon: DollarSign }];
   const adminTabs = [{ id: "payments", label: "Payments", icon: DollarSign }, { id: "salons", label: "Salons", icon: Store }, { id: "content", label: "Content", icon: ImageIcon }, { id: "settings", label: "Settings", icon: Settings }];
-
-  const isSalonOwner = profile?.role === "salon_owner";
 
   let body;
   if (loading) {
@@ -1054,32 +1005,14 @@ export default function GlowCircleApp() {
     else if (tab === "feed") body = <FeedScreen category={feedCategory} setCategory={setFeedCategory} goProfile={(s) => { setActiveSalon(s); setTab("profile"); }} posts={posts} salons={salons} />;
     else if (tab === "profile") body = <SalonProfileScreen salon={activeSalon} onBack={() => setTab("feed")} startBooking={(salon, service) => { if (session) setBookingCtx({ salon, service }); else setPendingBooking({ salon, service }); }} posts={posts} />;
     else if (tab === "bookings") body = session ? <BookingsScreen bookings={bookings} /> : <AuthScreen onAuthed={() => {}} />;
-    else if (tab === "account") body = session ? <AccountScreen user={session.user} isSalonOwner={isSalonOwner} switchRole={(r) => { setRole(r); if (r === "salon") setDashTab("overview"); if (r === "admin") setAdminTab("payments"); }} onSignOut={() => supabase.auth.signOut()} /> : <AuthScreen onAuthed={() => {}} />;
+    else if (tab === "account") body = session ? <AccountScreen user={session.user} switchRole={(r) => { setRole(r); if (r === "salon") setDashTab("overview"); if (r === "admin") setAdminTab("payments"); }} onSignOut={() => supabase.auth.signOut()} /> : <AuthScreen onAuthed={() => {}} />;
   } else if (role === "salon") {
-    if (!session) {
-      body = <AuthScreen onAuthed={() => {}} />;
-    } else if (!profile) {
-      body = <LoadingBlock label="Loading your account…" />;
-    } else if (profile.role !== "salon_owner") {
-      body = (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", gap: 10 }}>
-          <Store size={28} color="#C89B3C" />
-          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 600 }}>Not a salon account</div>
-          <div style={{ fontSize: 12.5, color: "#8A7A85", lineHeight: 1.5 }}>This login isn't registered as a salon owner. Sign out and create a new account, choosing "I'm a salon owner" at signup.</div>
-          <button onClick={() => supabase.auth.signOut()} style={{ marginTop: 6, padding: "10px 16px", borderRadius: 12, border: "1px solid #EFE6DE", background: "#fff", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>Sign out</button>
-        </div>
-      );
-    } else if (!mySalon) {
-      body = <SalonOnboarding session={session} onCreated={(s) => setMySalon({ ...s, services: [], stylists: [] })} />;
-    } else if (mySalon.status !== "approved") {
-      body = <SalonPending salon={mySalon} onUpdated={(s) => setMySalon(prev => ({ ...prev, ...s }))} onSignOut={() => supabase.auth.signOut()} />;
-    } else if (dashTab === "overview") {
-      body = <SalonOwnerHome salon={mySalon} onRefresh={loadMySalon} onSignOut={() => supabase.auth.signOut()} />;
-    } else if (dashTab === "calendar") {
-      body = <DashCalendar availability={availability} toggleSlot={toggleSlot} />;
-    } else {
-      body = <DashEarnings bookings={bookings} commissionRate={commissionRate} frozen={frozenSalons.has("s1")} />;
-    }
+    if (!session) body = <AuthScreen onAuthed={() => {}} roleHint="salon_owner" subtitle="Log in, or create an account to list your salon" />;
+    else if (!mySalon) body = <SalonOnboarding session={session} onSubmitted={(salon) => setMySalon(salon)} />;
+    else if (mySalon.status !== "approved") body = <SalonPending salon={mySalon} />;
+    else if (dashTab === "overview") body = <DashOverview bookings={salonBookings} commissionRate={commissionRate} salon={mySalon} />;
+    else if (dashTab === "calendar") body = <DashCalendar availability={availability} toggleSlot={toggleSlot} />;
+    else if (dashTab === "earnings") body = <DashEarnings bookings={salonBookings} commissionRate={commissionRate} frozen={frozenSalons.has(mySalon.id)} />;
   } else if (role === "stylist") {
     const stylist = allStylists.find(s => s.id === currentStylistId);
     body = stylist
@@ -1087,12 +1020,10 @@ export default function GlowCircleApp() {
       : <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>No stylists found.</div></div>;
   } else {
     if (adminTab === "payments") body = <AdminPayments bookings={bookings} commissionRate={commissionRate} />;
-    else if (adminTab === "salons") body = <AdminSalons salons={salons} frozenSalons={frozenSalons} toggleFreeze={toggleFreeze} />;
+    else if (adminTab === "salons") body = <AdminSalons salons={pendingSalons} frozenSalons={frozenSalons} toggleFreeze={toggleFreeze} onApprove={approveSalon} onReject={rejectSalon} />;
     else if (adminTab === "content") body = <AdminContent posts={posts} setPostStatus={setPostStatus} salons={salons} />;
     else if (adminTab === "settings") body = <AdminSettings commissionRate={commissionRate} setCommissionRate={setCommissionRate} feeBearer={feeBearer} setFeeBearer={setFeeBearer} />;
   }
-
-  const showSalonBottomNav = role === "salon" && session && profile?.role === "salon_owner" && mySalon?.status === "approved";
 
   return (
     <div style={{ minHeight: "100vh", background: "#EFE6DE", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 12px", gap: 14 }}>
@@ -1116,7 +1047,7 @@ export default function GlowCircleApp() {
         )}
         {bookingCtx && (<BookingFlow salon={bookingCtx.salon} service={bookingCtx.service} bookedSlots={bookedSlots} onClose={() => { setBookingCtx(null); setTab("bookings"); }} onConfirmed={confirmBooking} />)}
         {role === "customer" && <BottomNav tab={tab} setTab={setTab} tabs={customerTabs} />}
-        {showSalonBottomNav && <BottomNav tab={dashTab} setTab={setDashTab} tabs={dashTabs} />}
+        {role === "salon" && <BottomNav tab={dashTab} setTab={setDashTab} tabs={dashTabs} />}
         {role === "admin" && <BottomNav tab={adminTab} setTab={setAdminTab} tabs={adminTabs} />}
       </PhoneFrame>
     </div>
