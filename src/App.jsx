@@ -406,7 +406,7 @@ function BookingFlow({ salon, service, onClose, bookedSlots, session }) {
 
   const payNow = async () => {
     setPayBusy(true); setPayError("");
-    const { data, error } = await supabase.functions.invoke("initialize-payment", {
+    const { data, error } = await supabase.functions.invoke("clever-endpoint", {
       body: {
         email: session.user.email,
         amount: Math.round(service.price * 100), // Paystack expects kobo
@@ -980,7 +980,7 @@ export default function GlowCircleApp() {
     const reference = params.get("reference") || params.get("trxref");
     if (!reference) return;
     setPaymentResult("verifying");
-    supabase.functions.invoke("verify-payment", { body: { reference } }).then(({ data, error }) => {
+    supabase.functions.invoke("verify-payment-", { body: { reference } }).then(({ data, error }) => {
       window.history.replaceState(null, "", window.location.pathname); // clean the URL so a refresh doesn't re-verify
       if (error || !data?.success) {
         setPaymentResult({ success: false, message: data?.message || error?.message || "We couldn't confirm this payment." });
