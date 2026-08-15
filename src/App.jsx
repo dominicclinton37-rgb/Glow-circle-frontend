@@ -392,20 +392,48 @@ function SalonProfileScreen({ salon, onBack, startBooking, posts }) {
   );
 }
 
-function BookingFlow({ salon, service, onClose, onConfirmed, bookedSlots }) {
+function BookingFlow({ salon, service, onClose, bookedSlots, session }) {
   const [step, setStep] = useState(1);
   const [stylist, setStylist] = useState(salon.stylists[0]);
   const [date, setDate] = useState("Today");
   const [slot, setSlot] = useState(null);
   const [payMethod, setPayMethod] = useState("card");
+  const [payBusy, setPayBusy] = useState(false);
+  const [payError, setPayError] = useState("");
   const key = (d, t) => `${stylist.id}|${d}|${t}`;
   const isTaken = (t) => bookedSlots.has(key(date, t));
   const steps = ["Stylist", "Time", "Pay"];
 
+  const payNow = async () => {
+    setPayBusy(true); setPayError("");
+    const { data, error } = await supabase.functions.invoke("initialize-payment", {
+      body: {
+        email: session.user.email,
+        amount: Math.round(service.price * 100), // Paystack expects kobo
+        payMethod,
+        callback_url: window.location.origin + window.location.pathname,
+        metadata: {
+          salon_id: salon.id,
+          stylist_id: stylist.id,
+          service_id: service.id,
+          customer_id: session.user.id,
+          booking_date: date,
+          time_slot: slot,
+        },
+      },
+    });
+    if (error || !data?.data?.authorization_url) {
+      setPayError(data?.error || error?.message || "Couldn't start payment. Try again.");
+      setPayBusy(false);
+      return;
+    }
+    window.location.href = data.data.authorization_url; // sends the customer to Paystack's real checkout page
+  };
+
   return (
     <div style={{ position: "absolute", inset: 0, background: "#FBF7F2", display: "flex", flexDirection: "column", zIndex: 20 }}>
-      <TopBar title={step === 4 ? "Confirmed" : `Book ${service.name}`} onBack={step === 4 ? null : (step === 1 ? onClose : () => setStep(step - 1))} right={step !== 4 && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={18} /></button>} />
-      {step < 4 && <div style={{ display: "flex", gap: 6, padding: "0 20px 14px" }}>{steps.map((s, i) => (<div key={s} style={{ flex: 1, height: 4, borderRadius: 4, background: i < step ? "#C89B3C" : "#EFE6DE" }} />))}</div>}
+      <TopBar title={`Book ${service.name}`} onBack={step === 1 ? onClose : () => setStep(step - 1)} right={<button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={18} /></button>} />
+      <div style={{ display: "flex", gap: 6, padding: "0 20px 14px" }}>{steps.map((s, i) => (<div key={s} style={{ flex: 1, height: 4, borderRadius: 4, background: i < step ? "#C89B3C" : "#EFE6DE" }} />))}</div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 20px" }}>
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -438,7 +466,7 @@ function BookingFlow({ salon, service, onClose, onConfirmed, bookedSlots }) {
               <Row label="Service" value={service.name} /><Row label="Stylist" value={stylist.name} /><Row label="When" value={`${date} · ${slot}`} />
               <div style={{ height: 1, background: "#EFE6DE", margin: "10px 0" }} />
               <Row label="Service price" value={naira(service.price)} />
-              <div style={{ fontSize: 11, color: "#B7ACB1", marginTop: 8 }}>Held securely — released to the salon after your appointment. Free cancellation up to 24 hours before.</div>
+              <div style={{ fontSize: 11, color: "#B7ACB1", marginTop: 8 }}>You'll be taken to Paystack's secure checkout to complete payment.</div>
             </div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#3D1B3D", margin: "18px 0 10px" }}>PAYMENT METHOD</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -448,16 +476,8 @@ function BookingFlow({ salon, service, onClose, onConfirmed, bookedSlots }) {
                 </button>
               ))}
             </div>
-            <button onClick={() => { onConfirmed({ salon, service, stylist, date, slot, payMethod }); setStep(4); }} style={{ marginTop: 22, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Confirm & Pay {naira(service.price)}</button>
-          </div>
-        )}
-        {step === 4 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 40 }}>
-            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#EFE1EA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18 }}><Check size={34} color="#3D1B3D" /></div>
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600 }}>You're booked!</div>
-            <div style={{ fontSize: 13, color: "#8A7A85", marginTop: 8, lineHeight: 1.5 }}>{service.name} with {stylist.name} at {salon.name}<br />{date} · {slot}</div>
-            <div style={{ fontSize: 12, color: "#B7ACB1", marginTop: 14 }}>A reminder will be sent by SMS and push notification 24 hours before.</div>
-            <button onClick={onClose} style={{ marginTop: 26, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Done</button>
+            {payError && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 10 }}>{payError}</div>}
+            <button onClick={payNow} disabled={payBusy} style={{ marginTop: 22, width: "100%", padding: "14px", borderRadius: 14, border: "none", background: payBusy ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: payBusy ? "default" : "pointer" }}>{payBusy ? "Redirecting to Paystack…" : `Pay ${naira(service.price)} with Paystack`}</button>
           </div>
         )}
       </div>
@@ -855,6 +875,7 @@ export default function GlowCircleApp() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [session, setSession] = useState(null);
+  const [paymentResult, setPaymentResult] = useState(null); // null | "verifying" | { success, message }
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
   const [mySalon, setMySalon] = useState(null);
@@ -951,31 +972,23 @@ export default function GlowCircleApp() {
       }
     }
     fetchMyBookings();
-  }, [session]);
+  }, [session, paymentResult]);
 
-  const confirmBooking = async (b) => {
-    setBookings(prev => [b, ...prev]);
-    setBookedSlots(prev => new Set(prev).add(`${b.stylist.id}|${b.date}|${b.slot}`));
-    const fee = paystackFee(b.service.price);
-    const commission = b.service.price * commissionRate;
-    const salonNet = b.service.price - fee - commission;
-    const { error } = await supabase.from("bookings").insert({
-      salon_id: b.salon.id,
-      stylist_id: b.stylist.id,
-      service_id: b.service.id,
-      customer_id: session?.user?.id,
-      customer_name: session?.user?.user_metadata?.full_name || session?.user?.email || "Guest",
-      booking_date: b.date,
-      time_slot: b.slot,
-      status: "confirmed",
-      gross_amount: b.service.price,
-      commission_amount: Math.round(commission),
-      paystack_fee: Math.round(fee),
-      salon_net: Math.round(salonNet),
-      payment_method: b.payMethod || "card",
+  // If Paystack just redirected the customer back here, verify the payment for real
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get("reference") || params.get("trxref");
+    if (!reference) return;
+    setPaymentResult("verifying");
+    supabase.functions.invoke("verify-payment", { body: { reference } }).then(({ data, error }) => {
+      window.history.replaceState(null, "", window.location.pathname); // clean the URL so a refresh doesn't re-verify
+      if (error || !data?.success) {
+        setPaymentResult({ success: false, message: data?.message || error?.message || "We couldn't confirm this payment." });
+      } else {
+        setPaymentResult({ success: true });
+      }
     });
-    if (error) console.error("Booking failed to save:", error.message);
-  };
+  }, []);
 
   const toggleSlot = (d, t) => setAvailability(prev => ({ ...prev, [`${d}|${t}`]: prev[`${d}|${t}`] === false ? true : false }));
   const toggleFreeze = (id) => setFrozenSalons(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -1048,7 +1061,31 @@ export default function GlowCircleApp() {
             <AuthScreen onAuthed={() => { setBookingCtx(pendingBooking); setPendingBooking(null); }} />
           </div>
         )}
-        {bookingCtx && (<BookingFlow salon={bookingCtx.salon} service={bookingCtx.service} bookedSlots={bookedSlots} onClose={() => { setBookingCtx(null); setTab("bookings"); }} onConfirmed={confirmBooking} />)}
+        {bookingCtx && (<BookingFlow salon={bookingCtx.salon} service={bookingCtx.service} bookedSlots={bookedSlots} onClose={() => { setBookingCtx(null); setTab("bookings"); }} session={session} />)}
+        {paymentResult && (
+          <div style={{ position: "absolute", inset: 0, background: "#FBF7F2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 30, padding: "0 30px", textAlign: "center" }}>
+            {paymentResult === "verifying" ? (
+              <>
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600 }}>Confirming your payment…</div>
+                <div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 8 }}>Please wait, don't close this page.</div>
+              </>
+            ) : paymentResult.success ? (
+              <>
+                <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#EFE1EA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}><Check size={28} color="#3D1B3D" /></div>
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 600 }}>Payment successful — you're booked!</div>
+                <div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 8 }}>Check "My Bookings" for your appointment details.</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600, color: "#B23B3B" }}>Payment not confirmed</div>
+                <div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 8 }}>{paymentResult.message}</div>
+              </>
+            )}
+            {paymentResult !== "verifying" && (
+              <button onClick={() => { setPaymentResult(null); setTab("bookings"); }} style={{ marginTop: 22, padding: "12px 26px", borderRadius: 14, border: "none", background: "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Done</button>
+            )}
+          </div>
+        )}
         {role === "customer" && <BottomNav tab={tab} setTab={setTab} tabs={customerTabs} />}
         {role === "salon" && <BottomNav tab={dashTab} setTab={setDashTab} tabs={dashTabs} />}
         {role === "admin" && <BottomNav tab={adminTab} setTab={setAdminTab} tabs={adminTabs} />}
