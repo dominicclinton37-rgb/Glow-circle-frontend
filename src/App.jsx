@@ -1019,7 +1019,10 @@ export default function GlowCircleApp() {
       ? <StylistStudio stylist={stylist} allStylists={allStylists} onSwitchStylist={setCurrentStylistId} myPosts={posts.filter(p => p.stylistId === currentStylistId)} onPublish={addPost} onDelete={deletePost} />
       : <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>No stylists found.</div></div>;
   } else {
-    if (adminTab === "payments") body = <AdminPayments bookings={bookings} commissionRate={commissionRate} />;
+    if (!session) body = <AuthScreen onAuthed={() => {}} subtitle="Admin sign-in" />;
+    else if (!profile) body = <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>Loading…</div></div>;
+    else if (profile.role !== "admin") body = <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 30px", textAlign: "center" }}><div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600, color: "#B23B3B" }}>Not authorized</div><div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 8 }}>This account doesn't have admin access.</div></div>;
+    else if (adminTab === "payments") body = <AdminPayments bookings={bookings} commissionRate={commissionRate} />;
     else if (adminTab === "salons") body = <AdminSalons salons={pendingSalons} frozenSalons={frozenSalons} toggleFreeze={toggleFreeze} onApprove={approveSalon} onReject={rejectSalon} />;
     else if (adminTab === "content") body = <AdminContent posts={posts} setPostStatus={setPostStatus} salons={salons} />;
     else if (adminTab === "settings") body = <AdminSettings commissionRate={commissionRate} setCommissionRate={setCommissionRate} feeBearer={feeBearer} setFeeBearer={setFeeBearer} />;
