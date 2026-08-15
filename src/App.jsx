@@ -99,6 +99,54 @@ function VerifiedBadge({ level, compact }) {
 
 /* ---------------- CUSTOMER SCREENS ---------------- */
 
+/* ---------------- AUTH ---------------- */
+
+function AuthScreen({ onAuthed }) {
+  const [mode, setMode] = useState("login"); // "login" | "signup"
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setError(""); setBusy(true);
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+      if (error) setError(error.message);
+      else if (data.user) onAuthed(data.session);
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else onAuthed(data.session);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600, textAlign: "center" }}>Glow Circle</div>
+      <div style={{ fontSize: 13, color: "#8A7A85", textAlign: "center", marginTop: 6, marginBottom: 26 }}>{mode === "login" ? "Welcome back" : "Create your account to book"}</div>
+
+      {mode === "signup" && (
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 10, background: "#fff" }} />
+      )}
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" autoCapitalize="none" style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 10, background: "#fff" }} />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 6, background: "#fff" }} />
+
+      {error && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 6 }}>{error}</div>}
+
+      <button onClick={submit} disabled={busy || !email || !password} style={{ marginTop: 16, padding: "14px", borderRadius: 14, border: "none", background: busy ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontWeight: 700, fontSize: 14, cursor: busy ? "default" : "pointer" }}>
+        {busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
+      </button>
+
+      <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }} style={{ marginTop: 16, background: "none", border: "none", color: "#8A6A21", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+        {mode === "login" ? "New here? Create an account" : "Already have an account? Log in"}
+      </button>
+    </div>
+  );
+}
+
 function HomeScreen({ goFeed, salons }) {
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 16px" }}>
@@ -353,21 +401,24 @@ function BookingsScreen({ bookings }) {
   );
 }
 
-function AccountScreen({ switchRole }) {
+function AccountScreen({ switchRole, user, onSignOut }) {
+  const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Customer";
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <TopBar title="Account" />
       <div style={{ padding: "10px 20px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <GlowRing size={58}><div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#3D1B3D,#C89B3C)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>J</div></GlowRing>
-          <div><div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600 }}>Jasmine T.</div><div style={{ fontSize: 12, color: "#8A7A85" }}>Lekki, Lagos · Member since 2026</div></div>
+          <GlowRing size={58}><div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#3D1B3D,#C89B3C)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>{name[0]?.toUpperCase()}</div></GlowRing>
+          <div><div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600 }}>{name}</div><div style={{ fontSize: 12, color: "#8A7A85" }}>{user?.email}</div></div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 24 }}>
           {[{ icon: CreditCard, label: "Payment methods" }, { icon: Bell, label: "Notifications" }, { icon: Settings, label: "Settings" }].map((it, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", border: "1px solid #EFE6DE", borderRadius: 14, background: "#fff" }}><it.icon size={17} color="#3D1B3D" /><span style={{ fontSize: 13.5, fontWeight: 600 }}>{it.label}</span></div>
           ))}
         </div>
-        <button onClick={() => switchRole("salon")} style={{ marginTop: 22, width: "100%", padding: "13px", borderRadius: 14, border: "1px dashed #C89B3C", background: "#FBF3E0", color: "#8A6A21", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Switch to Salon Owner view →</button>
+        <button onClick={onSignOut} style={{ marginTop: 22, width: "100%", padding: "13px", borderRadius: 14, border: "1px solid #F5E1E1", background: "#fff", color: "#B23B3B", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Sign out</button>
+        <div style={{ fontSize: 11, color: "#B7ACB1", marginTop: 22, marginBottom: 6 }}>DEMO — for testing other roles:</div>
+        <button onClick={() => switchRole("salon")} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1px dashed #C89B3C", background: "#FBF3E0", color: "#8A6A21", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Switch to Salon Owner view →</button>
         <button onClick={() => switchRole("admin")} style={{ marginTop: 10, width: "100%", padding: "13px", borderRadius: 14, border: "1px dashed #3D1B3D", background: "#EFE1EA", color: "#3D1B3D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Switch to Admin view →</button>
       </div>
     </div>
@@ -685,6 +736,7 @@ export default function GlowCircleApp() {
   const [feedCategory, setFeedCategory] = useState(null);
   const [activeSalon, setActiveSalon] = useState(null);
   const [bookingCtx, setBookingCtx] = useState(null);
+  const [pendingBooking, setPendingBooking] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [bookedSlots, setBookedSlots] = useState(new Set());
   const [availability, setAvailability] = useState({});
@@ -696,6 +748,15 @@ export default function GlowCircleApp() {
   const [salons, setSalons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [session, setSession] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Check for an existing logged-in session, and keep it in sync
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthChecked(true); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => setSession(newSession));
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   // Pull real salons + their services + stylists from Supabase on first load
   useEffect(() => {
@@ -733,6 +794,23 @@ export default function GlowCircleApp() {
     if (!currentStylistId && allStylists.length > 0) setCurrentStylistId(allStylists[0].id);
   }, [allStylists, currentStylistId]);
 
+  useEffect(() => {
+    if (!session) return;
+    async function fetchMyBookings() {
+      const { data } = await supabase
+        .from("bookings")
+        .select("id, booking_date, time_slot, gross_amount, salons(name), stylists(name), services(name)")
+        .order("created_at", { ascending: false });
+      if (data) {
+        setBookings(data.map(b => ({
+          salon: { name: b.salons?.name }, stylist: { name: b.stylists?.name }, service: { name: b.services?.name, price: b.gross_amount },
+          date: b.booking_date, slot: b.time_slot,
+        })));
+      }
+    }
+    fetchMyBookings();
+  }, [session]);
+
   const confirmBooking = async (b) => {
     setBookings(prev => [b, ...prev]);
     setBookedSlots(prev => new Set(prev).add(`${b.stylist.id}|${b.date}|${b.slot}`));
@@ -743,7 +821,8 @@ export default function GlowCircleApp() {
       salon_id: b.salon.id,
       stylist_id: b.stylist.id,
       service_id: b.service.id,
-      customer_name: "Jasmine T.",
+      customer_id: session?.user?.id,
+      customer_name: session?.user?.user_metadata?.full_name || session?.user?.email || "Guest",
       booking_date: b.date,
       time_slot: b.slot,
       status: "confirmed",
@@ -782,9 +861,9 @@ export default function GlowCircleApp() {
   } else if (role === "customer") {
     if (tab === "home") body = <HomeScreen goFeed={goFeed} salons={salons} />;
     else if (tab === "feed") body = <FeedScreen category={feedCategory} setCategory={setFeedCategory} goProfile={(s) => { setActiveSalon(s); setTab("profile"); }} posts={posts} salons={salons} />;
-    else if (tab === "profile") body = <SalonProfileScreen salon={activeSalon} onBack={() => setTab("feed")} startBooking={(salon, service) => setBookingCtx({ salon, service })} posts={posts} />;
-    else if (tab === "bookings") body = <BookingsScreen bookings={bookings} />;
-    else if (tab === "account") body = <AccountScreen switchRole={(r) => { setRole(r); if (r === "salon") setDashTab("overview"); if (r === "admin") setAdminTab("payments"); }} />;
+    else if (tab === "profile") body = <SalonProfileScreen salon={activeSalon} onBack={() => setTab("feed")} startBooking={(salon, service) => { if (session) setBookingCtx({ salon, service }); else setPendingBooking({ salon, service }); }} posts={posts} />;
+    else if (tab === "bookings") body = session ? <BookingsScreen bookings={bookings} /> : <AuthScreen onAuthed={() => {}} />;
+    else if (tab === "account") body = session ? <AccountScreen user={session.user} switchRole={(r) => { setRole(r); if (r === "salon") setDashTab("overview"); if (r === "admin") setAdminTab("payments"); }} onSignOut={() => supabase.auth.signOut()} /> : <AuthScreen onAuthed={() => {}} />;
   } else if (role === "salon") {
     if (dashTab === "overview") body = <DashOverview bookings={bookings} commissionRate={commissionRate} />;
     else if (dashTab === "calendar") body = <DashCalendar availability={availability} toggleSlot={toggleSlot} />;
@@ -815,6 +894,12 @@ export default function GlowCircleApp() {
 
       <PhoneFrame>
         {body}
+        {pendingBooking && (
+          <div style={{ position: "absolute", inset: 0, background: "#FBF7F2", display: "flex", flexDirection: "column", zIndex: 25 }}>
+            <TopBar title="Log in to book" right={<button onClick={() => setPendingBooking(null)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={18} /></button>} />
+            <AuthScreen onAuthed={() => { setBookingCtx(pendingBooking); setPendingBooking(null); }} />
+          </div>
+        )}
         {bookingCtx && (<BookingFlow salon={bookingCtx.salon} service={bookingCtx.service} bookedSlots={bookedSlots} onClose={() => { setBookingCtx(null); setTab("bookings"); }} onConfirmed={confirmBooking} />)}
         {role === "customer" && <BottomNav tab={tab} setTab={setTab} tabs={customerTabs} />}
         {role === "salon" && <BottomNav tab={dashTab} setTab={setDashTab} tabs={dashTabs} />}
