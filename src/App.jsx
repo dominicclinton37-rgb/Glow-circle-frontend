@@ -155,6 +155,7 @@ function SalonOnboarding({ session, onSubmitted }) {
   const [serviceName, setServiceName] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [stylistName, setStylistName] = useState("");
+  const [stylistEmail, setStylistEmail] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -170,7 +171,7 @@ function SalonOnboarding({ session, onSubmitted }) {
       await supabase.from("services").insert({ salon_id: salon.id, name: serviceName, price: Number(servicePrice), duration_minutes: 60 });
     }
     if (stylistName) {
-      await supabase.from("stylists").insert({ salon_id: salon.id, name: stylistName, specialty: "" });
+      await supabase.from("stylists").insert({ salon_id: salon.id, name: stylistName, specialty: "", email: stylistEmail || null });
     }
     setBusy(false);
     onSubmitted(salon);
@@ -209,7 +210,8 @@ function SalonOnboarding({ session, onSubmitted }) {
       </div>
 
       <div style={{ fontSize: 12, fontWeight: 700, color: "#3D1B3D", marginBottom: 6 }}>A STYLIST (optional)</div>
-      <input value={stylistName} onChange={(e) => setStylistName(e.target.value)} placeholder="Stylist name" style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 6, background: "#fff" }} />
+      <input value={stylistName} onChange={(e) => setStylistName(e.target.value)} placeholder="Stylist name" style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 10, background: "#fff" }} />
+      <input value={stylistEmail} onChange={(e) => setStylistEmail(e.target.value)} placeholder="Stylist email (so they can log in and post)" type="email" autoCapitalize="none" style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid #EFE6DE", fontSize: 14, marginBottom: 6, background: "#fff" }} />
 
       {error && <div style={{ fontSize: 12, color: "#B23B3B", marginTop: 8 }}>{error}</div>}
 
@@ -628,32 +630,81 @@ function DashEarnings({ bookings, commissionRate, frozen }) {
 
 /* ---------------- STYLIST STUDIO ---------------- */
 
-function StylistStudio({ stylist, allStylists, onSwitchStylist, myPosts, onPublish, onDelete }) {
+function StylistStudio({ session }) {
+  const [myStylist, setMyStylist] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [myPosts, setMyPosts] = useState([]);
   const [caption, setCaption] = useState("");
   const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    async function loadOrClaim() {
+      setLoading(true);
+      let { data: mine } = await supabase.from("stylists").select("id, name, specialty, salon_id, salons(name)").eq("user_id", session.user.id).maybeSingle();
+      if (!mine) {
+        const { data: unclaimed } = await supabase.from("stylists").select("id").eq("email", session.user.email).is("user_id", null).maybeSingle();
+        if (unclaimed) {
+          await supabase.from("stylists").update({ user_id: session.user.id }).eq("id", unclaimed.id);
+          const { data: claimed } = await supabase.from("stylists").select("id, name, specialty, salon_id, salons(name)").eq("id", unclaimed.id).maybeSingle();
+          mine = claimed;
+        }
+      }
+      if (!mine) { setNotFound(true); setLoading(false); return; }
+      setMyStylist(mine);
+      const { data: posts } = await supabase.from("posts").select("*").eq("stylist_id", mine.id).order("created_at", { ascending: false });
+      setMyPosts(posts || []);
+      setLoading(false);
+    }
+    loadOrClaim();
+  }, [session]);
 
   const handleFile = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreview({ url, type: file.type.startsWith("video") ? "video" : "image" });
+    setPreview({ file, url: URL.createObjectURL(file), type: file.type.startsWith("video") ? "video" : "image" });
   };
-  const publish = () => {
-    if (!preview) return;
-    onPublish({ stylistId: stylist.id, salonId: stylist.salonId, mediaUrl: preview.url, mediaType: preview.type, caption });
+
+  const publish = async () => {
+    if (!preview || !myStylist) return;
+    setUploading(true); setUploadError("");
+    const ext = preview.file.name.split(".").pop();
+    const path = `${myStylist.id}/${Date.now()}.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from("stylist-media").upload(path, preview.file);
+    if (uploadErr) { setUploadError(uploadErr.message); setUploading(false); return; }
+    const { data: urlData } = supabase.storage.from("stylist-media").getPublicUrl(path);
+    const { data: newPost, error: insertErr } = await supabase.from("posts")
+      .insert({ stylist_id: myStylist.id, salon_id: myStylist.salon_id, media_url: urlData.publicUrl, media_type: preview.type, caption })
+      .select().single();
+    setUploading(false);
+    if (insertErr) { setUploadError(insertErr.message); return; }
+    setMyPosts(prev => [newPost, ...prev]);
     setPreview(null); setCaption("");
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const onDelete = async (id) => {
+    await supabase.from("posts").delete().eq("id", id);
+    setMyPosts(prev => prev.filter(p => p.id !== id));
+  };
+
+  if (loading) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>Loading…</div></div>;
+
+  if (notFound) return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 30px", textAlign: "center" }}>
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600 }}>No stylist profile found</div>
+      <div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 8, lineHeight: 1.5 }}>Ask your salon owner to add you as a stylist using this exact email: <b>{session.user.email}</b></div>
+    </div>
+  );
+
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
       <div style={{ padding: "22px 20px 6px" }}>
-        <div style={{ fontSize: 13, color: "#8A7A85", fontWeight: 600 }}>{stylist.salonName}</div>
-        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600 }}>My Work & Feed</div>
-        <select value={stylist.id} onChange={(e) => onSwitchStylist(e.target.value)} style={{ marginTop: 10, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", color: "#3D1B3D" }}>
-          {allStylists.map(st => <option key={st.id} value={st.id}>{st.name} · {st.salonName}</option>)}
-        </select>
+        <div style={{ fontSize: 13, color: "#8A7A85", fontWeight: 600 }}>{myStylist.salons?.name}</div>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600 }}>{myStylist.name} · My Work & Feed</div>
       </div>
       <div style={{ padding: "16px 20px" }}>
         <div style={{ border: "1px dashed #C89B3C", borderRadius: 16, padding: 16, background: "#FBF3E0" }}>
@@ -668,9 +719,10 @@ function StylistStudio({ stylist, allStylists, onSwitchStylist, myPosts, onPubli
                 ? <video src={preview.url} style={{ width: "100%", borderRadius: 12, maxHeight: 220, objectFit: "cover" }} controls />
                 : <img src={preview.url} style={{ width: "100%", borderRadius: 12, maxHeight: 220, objectFit: "cover" }} alt="preview" />}
               <textarea value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption this look…" style={{ width: "100%", marginTop: 10, borderRadius: 10, border: "1px solid #EFE6DE", padding: 10, fontSize: 13, fontFamily: "inherit", resize: "none", minHeight: 60 }} />
+              {uploadError && <div style={{ fontSize: 11.5, color: "#B23B3B", marginTop: 6 }}>{uploadError}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button onClick={() => setPreview(null)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Discard</button>
-                <button onClick={publish} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: "#3D1B3D", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Publish</button>
+                <button onClick={() => setPreview(null)} disabled={uploading} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid #EFE6DE", background: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Discard</button>
+                <button onClick={publish} disabled={uploading} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: uploading ? "#E4DCD9" : "#3D1B3D", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{uploading ? "Uploading…" : "Publish"}</button>
               </div>
             </div>
           )}
@@ -683,9 +735,9 @@ function StylistStudio({ stylist, allStylists, onSwitchStylist, myPosts, onPubli
           {myPosts.length === 0 && <div style={{ fontSize: 12.5, color: "#B7ACB1", gridColumn: "1 / -1" }}>No posts yet — share your first look above.</div>}
           {myPosts.map(p => (
             <div key={p.id} style={{ borderRadius: 14, overflow: "hidden", border: "1px solid #EFE6DE", background: "#fff" }}>
-              {p.mediaType === "video"
-                ? <video src={p.mediaUrl} style={{ width: "100%", height: 110, objectFit: "cover" }} />
-                : <img src={p.mediaUrl} style={{ width: "100%", height: 110, objectFit: "cover" }} alt={p.caption} />}
+              {p.media_type === "video"
+                ? <video src={p.media_url} style={{ width: "100%", height: 110, objectFit: "cover" }} />
+                : <img src={p.media_url} style={{ width: "100%", height: 110, objectFit: "cover" }} alt={p.caption} />}
               <div style={{ padding: 8 }}>
                 <div style={{ fontSize: 11, color: "#8A7A85", lineHeight: 1.3, minHeight: 28 }}>{p.caption || "—"}</div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
@@ -870,7 +922,25 @@ export default function GlowCircleApp() {
   const [feeBearer, setFeeBearer] = useState("salon");
   const [frozenSalons, setFrozenSalons] = useState(new Set());
   const [posts, setPosts] = useState([]);
-  const [currentStylistId, setCurrentStylistId] = useState(null);
+  const refreshPublishedPosts = () => {
+    supabase.from("posts").select("*").eq("status", "published").order("created_at", { ascending: false })
+      .then(({ data }) => setPosts((data || []).map(p => ({ id: p.id, salonId: p.salon_id, stylistId: p.stylist_id, mediaUrl: p.media_url, mediaType: p.media_type, caption: p.caption, status: p.status }))));
+  };
+  useEffect(() => { refreshPublishedPosts(); }, []);
+
+  const [adminPosts, setAdminPosts] = useState([]);
+  const refreshAdminPosts = () => {
+    supabase.from("posts").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => setAdminPosts((data || []).map(p => ({ id: p.id, salonId: p.salon_id, stylistId: p.stylist_id, mediaUrl: p.media_url, mediaType: p.media_type, caption: p.caption, status: p.status }))));
+  };
+  useEffect(() => {
+    if (role === "admin" && adminTab === "content" && profile?.role === "admin") refreshAdminPosts();
+  }, [role, adminTab, profile]);
+  const setAdminPostStatus = async (id, status) => {
+    await supabase.from("posts").update({ status }).eq("id", id);
+    refreshAdminPosts();
+    refreshPublishedPosts(); // keep the customer-facing feed in sync too
+  };
   const [salons, setSalons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -952,11 +1022,6 @@ export default function GlowCircleApp() {
 
   const allStylists = salons.flatMap(s => s.stylists.map(st => ({ ...st, salonId: s.id, salonName: s.name, salonPhoto: s.photo })));
 
-  // Once salons load, default the Stylist Studio to the first real stylist
-  useEffect(() => {
-    if (!currentStylistId && allStylists.length > 0) setCurrentStylistId(allStylists[0].id);
-  }, [allStylists, currentStylistId]);
-
   useEffect(() => {
     if (!session) return;
     async function fetchMyBookings() {
@@ -992,9 +1057,6 @@ export default function GlowCircleApp() {
 
   const toggleSlot = (d, t) => setAvailability(prev => ({ ...prev, [`${d}|${t}`]: prev[`${d}|${t}`] === false ? true : false }));
   const toggleFreeze = (id) => setFrozenSalons(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const addPost = (post) => setPosts(prev => [{ id: `p${Date.now()}`, status: "pending", ...post }, ...prev]);
-  const setPostStatus = (id, status) => setPosts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
-  const deletePost = (id) => setPosts(prev => prev.filter(p => p.id !== id));
   const goFeed = (cat, salon) => { setFeedCategory(cat); if (salon) { setActiveSalon(salon); setTab("profile"); } else setTab("feed"); };
 
   const customerTabs = [{ id: "home", label: "Home", icon: Home }, { id: "feed", label: "Discover", icon: Grid3x3 }, { id: "bookings", label: "Bookings", icon: Calendar }, { id: "account", label: "Account", icon: User }];
@@ -1027,17 +1089,14 @@ export default function GlowCircleApp() {
     else if (dashTab === "calendar") body = <DashCalendar availability={availability} toggleSlot={toggleSlot} />;
     else if (dashTab === "earnings") body = <DashEarnings bookings={salonBookings} commissionRate={commissionRate} frozen={frozenSalons.has(mySalon.id)} />;
   } else if (role === "stylist") {
-    const stylist = allStylists.find(s => s.id === currentStylistId);
-    body = stylist
-      ? <StylistStudio stylist={stylist} allStylists={allStylists} onSwitchStylist={setCurrentStylistId} myPosts={posts.filter(p => p.stylistId === currentStylistId)} onPublish={addPost} onDelete={deletePost} />
-      : <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>No stylists found.</div></div>;
+    body = !session ? <AuthScreen onAuthed={() => {}} roleHint="stylist" subtitle="Log in to manage your posts" /> : <StylistStudio session={session} />;
   } else {
     if (!session) body = <AuthScreen onAuthed={() => {}} subtitle="Admin sign-in" />;
     else if (!profile) body = <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 12, color: "#B7ACB1" }}>Loading…</div></div>;
     else if (profile.role !== "admin") body = <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 30px", textAlign: "center" }}><div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600, color: "#B23B3B" }}>Not authorized</div><div style={{ fontSize: 12.5, color: "#8A7A85", marginTop: 8 }}>This account doesn't have admin access.</div></div>;
     else if (adminTab === "payments") body = <AdminPayments bookings={bookings} commissionRate={commissionRate} />;
     else if (adminTab === "salons") body = <AdminSalons salons={pendingSalons} frozenSalons={frozenSalons} toggleFreeze={toggleFreeze} onApprove={approveSalon} onReject={rejectSalon} />;
-    else if (adminTab === "content") body = <AdminContent posts={posts} setPostStatus={setPostStatus} salons={salons} />;
+    else if (adminTab === "content") body = <AdminContent posts={adminPosts} setPostStatus={setAdminPostStatus} salons={pendingSalons} />;
     else if (adminTab === "settings") body = <AdminSettings commissionRate={commissionRate} setCommissionRate={setCommissionRate} feeBearer={feeBearer} setFeeBearer={setFeeBearer} />;
   }
 
