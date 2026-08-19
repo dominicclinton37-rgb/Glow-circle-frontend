@@ -4,7 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="format-detection" content="telephone=no, address=no, email=no, date=no" />
-    
+    <script>
+      window.addEventListener("error", function (e) {
+        var el = document.getElementById("crash-report") || document.createElement("div");
+        el.id = "crash-report";
+        el.style = "position:fixed;inset:0;background:#fff;color:#900;padding:20px;font-family:monospace;font-size:13px;z-index:99999;overflow:auto;white-space:pre-wrap;";
+        el.textContent = "App crashed:\n\n" + (e.error ? (e.error.stack || e.error.message) : e.message);
+        document.body.appendChild(el);
+      });
+    </script>
     <title>Glow Circle — Beauty Services Marketplace</title>
     <link
       rel="stylesheet"
