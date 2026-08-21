@@ -5,12 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="format-detection" content="telephone=no, address=no, email=no, date=no" />
     <script>
-      window.addEventListener("error", function (e) {
+      function showCrash(text) {
         var el = document.getElementById("crash-report") || document.createElement("div");
         el.id = "crash-report";
         el.style = "position:fixed;inset:0;background:#fff;color:#900;padding:20px;font-family:monospace;font-size:13px;z-index:99999;overflow:auto;white-space:pre-wrap;";
-        el.textContent = "App crashed:\n\n" + (e.error ? (e.error.stack || e.error.message) : e.message);
+        el.textContent = text;
         document.body.appendChild(el);
+      }
+      window.addEventListener("error", function (e) {
+        var msg = e.error ? (e.error.name + ": " + e.error.message + "\n\n" + (e.error.stack || "")) : e.message;
+        showCrash("App crashed:\n\n" + msg);
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        var r = e.reason;
+        var msg = r && r.message ? (r.name + ": " + r.message + "\n\n" + (r.stack || "")) : String(r);
+        showCrash("Unhandled promise rejection:\n\n" + msg);
       });
     </script>
     <title>Glow Circle — Beauty Services Marketplace</title>
